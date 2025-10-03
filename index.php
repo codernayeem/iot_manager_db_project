@@ -7,16 +7,64 @@ require_once 'config/database.php';
  * SQL Features: Database creation, Table management, Advanced SQL objects
  */
 
+// Handle database setup request
+if (isset($_GET['setup_db']) && $_GET['setup_db'] == '1') {
+    try {
+        $database = new Database();
+        $database->createDatabase();
+        $database->createTables();
+        $database->insertSampleData();
+        
+        $_SESSION['success_message'] = 'Database setup completed successfully!';
+        header('Location: index.php');
+        exit;
+    } catch (Exception $e) {
+        $_SESSION['error_message'] = 'Database setup failed: ' . $e->getMessage();
+    }
+}
+
+// Handle configuration updates
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_config'])) {
+    try {
+        $database = new Database();
+        $newConfig = [
+            'host' => $_POST['host'] ?? '',
+            'db_name' => $_POST['db_name'] ?? '',
+            'username' => $_POST['username'] ?? '',
+            'password' => $_POST['password'] ?? '',
+            'port' => (int)($_POST['port'] ?? 3306),
+            'charset' => $_POST['charset'] ?? 'utf8'
+        ];
+        
+        $database->updateConfig($newConfig);
+        $_SESSION['success_message'] = 'Configuration updated successfully!';
+        header('Location: index.php');
+        exit;
+    } catch (Exception $e) {
+        $_SESSION['error_message'] = 'Configuration update failed: ' . $e->getMessage();
+    }
+}
+
+// Get current configuration and database status
 $database = new Database();
+$currentConfig = $database->getConfig();
 $message = '';
 $error = '';
 $logs = [];
 
-// Initialize connection
-$database->getConnection();
+// Display session messages
+if (isset($_SESSION['success_message'])) {
+    $message = $_SESSION['success_message'];
+    unset($_SESSION['success_message']);
+}
+if (isset($_SESSION['error_message'])) {
+    $error = $_SESSION['error_message'];
+    unset($_SESSION['error_message']);
+}
 
-// Get current database status first
+// Initialize connection and get database status
 try {
+    $database->getConnection();
     $dbStatus = $database->getDatabaseStatus();
     
     // Get table row counts if database exists
@@ -145,6 +193,31 @@ if (isset($_POST['action'])) {
                 $logs[] = "❌ Reset failed: " . $e->getMessage();
             }
             break;
+            
+        case 'update_config':
+            try {
+                $host = $_POST['host'] ?? 'localhost';
+                $db_name = $_POST['db_name'] ?? 'iot_device_manager';
+                $username = $_POST['username'] ?? 'root';
+                $password = $_POST['password'] ?? '';
+                
+                // Validate connection first
+                $testConn = new PDO("mysql:host=$host", $username, $password);
+                $testConn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                $logs[] = "✅ Connection test successful";
+                
+                // Update the configuration file
+                if (updateDatabaseConfig($host, $db_name, $username, $password)) {
+                    $logs[] = "✅ Database configuration updated successfully";
+                    $logs[] = "ℹ️ Please refresh the page to apply new settings";
+                } else {
+                    $logs[] = "❌ Failed to update configuration file";
+                }
+                
+            } catch (Exception $e) {
+                $logs[] = "❌ Configuration update failed: " . $e->getMessage();
+            }
+            break;
     }
 }
 
@@ -206,6 +279,17 @@ if (isset($_POST['action'])) {
             <i class="fas fa-database text-3xl text-blue-600 mb-2"></i>
             <h1 class="text-2xl font-bold text-gray-800 mb-1">IoT Device Manager</h1>
             <p class="text-md text-gray-600">Database Management Dashboard</p>
+            
+            <!-- Quick Configuration Access -->
+            <div class="mt-4 flex justify-center gap-2">
+                <a href="db_config.php" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                    <i class="fas fa-cog"></i> Database Config
+                </a>
+                <span class="text-xs text-gray-500 flex items-center">
+                    <span class="w-2 h-2 bg-<?php echo $dbStatus['connected'] ? 'green' : 'red'; ?>-500 rounded-full mr-1"></span>
+                    <?php echo htmlspecialchars($currentConfig['host'] . ':' . ($currentConfig['port'] ?? 3306) . '/' . $currentConfig['db_name']); ?>
+                </span>
+            </div>
         </div>
         
         <!-- Messages -->
@@ -411,7 +495,7 @@ if (isset($_POST['action'])) {
             </form>
             </div>
             
-            <div class="grid grid-cols-2 gap-6">
+            <div class="grid grid-cols-3 gap-6">
             <!-- Left Side - Database Actions -->
             <div>
                 <h3 class="text-md font-semibold text-gray-700 mb-3">Database Operations</h3>
@@ -465,6 +549,24 @@ if (isset($_POST['action'])) {
                 </div>
             </div>
             
+            <!-- Middle - Database Configuration -->
+            <div>
+                <h3 class="text-md font-semibold text-gray-700 mb-3">Database Configuration</h3>
+                <div class="bg-gray-50 rounded p-3 mb-4">
+                    <h4 class="font-semibold text-gray-800 mb-2 text-sm">Current Settings:</h4>
+                    <div class="text-xs text-gray-600 space-y-1">
+                        <p><strong>Host:</strong> <?php echo htmlspecialchars($currentConfig['host'] ?? 'localhost'); ?></p>
+                        <p><strong>Database:</strong> <?php echo htmlspecialchars($currentConfig['db_name'] ?? 'iot_device_manager'); ?></p>
+                        <p><strong>Username:</strong> <?php echo htmlspecialchars($currentConfig['username'] ?? 'root'); ?></p>
+                        <p><strong>Password:</strong> <?php echo $currentConfig['password'] ? str_repeat('*', strlen($currentConfig['password'])) : 'No password'; ?></p>
+                    </div>
+                </div>
+                
+                <button onclick="showConfigModal()" class="w-full bg-indigo-600 text-white py-2 px-3 rounded hover:bg-indigo-700 transition text-sm">
+                    <i class="fas fa-cog mr-1"></i>Edit Configuration
+                </button>
+            </div>
+            
             <!-- Right Side - Application Access -->
             <div>
                 <h3 class="text-md font-semibold text-gray-700 mb-3">Application Access</h3>
@@ -487,6 +589,71 @@ if (isset($_POST['action'])) {
                 </div>
                 
             </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Database Configuration Modal -->
+    <div id="configModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg max-w-md w-full">
+                <div class="bg-indigo-600 text-white p-4 rounded-t-lg">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-bold">Database Configuration</h3>
+                        <button onclick="closeConfigModal()" class="text-white hover:text-gray-200">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+                <form method="POST" class="p-6">
+                    <input type="hidden" name="action" value="update_config">
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Database Host</label>
+                            <input type="text" name="host" value="<?php echo htmlspecialchars($currentConfig['host'] ?? 'localhost'); ?>" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                                   placeholder="localhost" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Database Name</label>
+                            <input type="text" name="db_name" value="<?php echo htmlspecialchars($currentConfig['db_name'] ?? 'iot_device_manager'); ?>" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                                   placeholder="iot_device_manager" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                            <input type="text" name="username" value="<?php echo htmlspecialchars($currentConfig['username'] ?? 'root'); ?>" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                                   placeholder="root" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                            <input type="password" name="password" value="<?php echo htmlspecialchars($currentConfig['password'] ?? ''); ?>" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" 
+                                   placeholder="Leave empty for no password">
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 flex space-x-3">
+                        <button type="button" onclick="closeConfigModal()" 
+                                class="flex-1 bg-gray-600 text-white py-2 px-4 rounded hover:bg-gray-700 transition text-sm">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                class="flex-1 bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 transition text-sm">
+                            <i class="fas fa-save mr-1"></i>Save & Test
+                        </button>
+                    </div>
+                    
+                    <div class="mt-4 bg-yellow-50 p-3 rounded text-xs text-yellow-800">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        <strong>Warning:</strong> Changes will test the connection first. The page will need to be refreshed after saving.
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -1090,7 +1257,22 @@ GROUP BY d.d_id, d.device_name, dt.t_name;</code></pre>
             document.getElementById('tableModal').classList.add('hidden');
         }
         
+        // Configuration Modal functions
+        function showConfigModal() {
+            document.getElementById('configModal').classList.remove('hidden');
+        }
+        
+        function closeConfigModal() {
+            document.getElementById('configModal').classList.add('hidden');
+        }
+        
         // Close modals when clicking outside
+        document.getElementById('configModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeConfigModal();
+            }
+        });
+        
         document.getElementById('sqlModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeSQLModal();
