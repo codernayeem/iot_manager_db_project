@@ -105,6 +105,11 @@ class DatabaseAPI {
     private function handlePost($action) {
         $input = json_decode(file_get_contents('php://input'), true);
         
+        // If action is not in URL, get it from POST body
+        if (empty($action) && isset($input['action'])) {
+            $action = $input['action'];
+        }
+        
         switch ($action) {
             case 'create_database':
                 $result = $this->database->createDatabase();
