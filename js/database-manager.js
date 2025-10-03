@@ -305,6 +305,14 @@ class DatabaseManager {
             }
         });
 
+        // Update views count
+        const viewsElement = document.getElementById('views-status');
+        if (viewsElement) {
+            const viewCount = status.views ? status.views.length : 0;
+            viewsElement.textContent = `(${viewCount}/3)`;
+            viewsElement.className = viewCount > 0 ? 'status-good' : 'status-missing';
+        }
+
         // Update views status
         ['v_device_summary', 'v_log_analysis', 'v_resolver_performance'].forEach(view => {
             const element = document.querySelector(`[data-view-status="${view}"]`);

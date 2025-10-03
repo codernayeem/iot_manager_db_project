@@ -144,7 +144,7 @@ $currentConfig = $database->getConfig();
                 
                 <!-- Views Status -->
                 <div class="bg-gray-50 rounded p-3 text-sm">
-                    <h3 class="font-semibold text-gray-700 mb-2">Views <span class="view-count">(0/3)</span></h3>
+                    <h3 class="font-semibold text-gray-700 mb-2">Views <span id="views-status" class="view-count">(0/3)</span></h3>
                     <div class="space-y-1 text-xs">
                         <?php foreach (['v_device_summary', 'v_log_analysis', 'v_resolver_performance'] as $view): ?>
                             <div class="flex justify-between">
