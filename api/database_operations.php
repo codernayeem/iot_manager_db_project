@@ -1,0 +1,341 @@
+<?php
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    exit(0);
+}
+
+require_once '../config/database.php';
+
+class DatabaseAPI {
+    private $database;
+    
+    public function __construct() {
+        $this->database = new Database();
+    }
+    
+    public function handleRequest() {
+        $method = $_SERVER['REQUEST_METHOD'];
+        $action = $_GET['action'] ?? '';
+        
+        try {
+            switch ($method) {
+                case 'GET':
+                    $this->handleGet($action);
+                    break;
+                case 'POST':
+                    $this->handlePost($action);
+                    break;
+                default:
+                    throw new Exception('Method not allowed');
+            }
+        } catch (Exception $e) {
+            $this->sendResponse(false, $e->getMessage());
+        }
+    }
+    
+    private function handleGet($action) {
+        switch ($action) {
+            case 'status':
+                try {
+                    $this->database->getConnection();
+                    $status = $this->database->getDatabaseStatus();
+                    
+                    // Mark as connected if we got here without exception
+                    $status['connection'] = true;
+                    
+                    // Get table row counts if database exists
+                    if ($status['database_exists'] && count($status['tables']) > 0) {
+                        $conn = $this->database->getConnection();
+                        $tableRowCounts = [];
+                        foreach ($status['tables'] as $table) {
+                            try {
+                                $stmt = $conn->prepare("SELECT COUNT(*) FROM `$table`");
+                                $stmt->execute();
+                                $tableRowCounts[$table] = $stmt->fetchColumn();
+                            } catch (Exception $e) {
+                                $tableRowCounts[$table] = 0;
+                            }
+                        }
+                        $status['table_row_counts'] = $tableRowCounts;
+                    } else {
+                        $status['table_row_counts'] = [];
+                    }
+                    
+                    $this->sendResponse(true, 'Database status retrieved', $status);
+                } catch (Exception $e) {
+                    // If connection fails, return disconnected status
+                    $status = [
+                        'connection' => false,
+                        'database_exists' => false,
+                        'tables' => [],
+                        'views' => [],
+                        'procedures' => [],
+                        'functions' => [],
+                        'table_row_counts' => []
+                    ];
+                    $this->sendResponse(true, 'Database status retrieved (disconnected)', $status);
+                }
+                break;
+                
+            case 'sql_content':
+                $type = $_GET['type'] ?? '';
+                $name = $_GET['name'] ?? '';
+                $content = $this->getSQLContent($type, $name);
+                $this->sendResponse(true, 'SQL content retrieved', ['content' => $content]);
+                break;
+                
+            default:
+                throw new Exception('Unknown action');
+        }
+    }
+    
+    private function handlePost($action) {
+        $input = json_decode(file_get_contents('php://input'), true);
+        
+        switch ($action) {
+            case 'create_database':
+                $result = $this->database->createDatabase();
+                $message = $result ? 'Database created successfully' : 'Failed to create database';
+                $this->sendResponse($result, $message, ['logs' => ["✅ Database 'iot_device_manager' created successfully"]]);
+                break;
+                
+            case 'create_tables':
+                $result = $this->database->createTables();
+                $logs = [];
+                if ($result) {
+                    $logs = [
+                        "✅ All tables created successfully",
+                        "✅ Views created (v_device_summary, v_log_analysis, v_resolver_performance)",
+                        "✅ Stored procedures created (sp_device_health_check, sp_cleanup_old_logs, sp_deploy_device, sp_resolve_issue)",
+                        "✅ Functions created (fn_calculate_uptime, fn_device_risk_score, fn_format_duration)",
+                        "✅ Performance indexes created"
+                    ];
+                } else {
+                    $logs = ["❌ Failed to create tables"];
+                }
+                $message = $result ? 'Tables created successfully' : 'Failed to create tables';
+                $this->sendResponse($result, $message, ['logs' => $logs]);
+                break;
+                
+            case 'insert_sample_data':
+                $result = $this->database->insertSampleData();
+                $logs = [];
+                if ($result) {
+                    $logs = [
+                        "✅ Comprehensive sample data inserted successfully",
+                        "✅ 18 devices across 10 categories",
+                        "✅ 6 locations with GPS coordinates",
+                        "✅ 5 technician users",
+                        "✅ 30 days of realistic log data (3000+ entries)"
+                    ];
+                } else {
+                    $logs = ["❌ Failed to insert sample data"];
+                }
+                $message = $result ? 'Sample data inserted successfully' : 'Failed to insert sample data';
+                $this->sendResponse($result, $message, ['logs' => $logs]);
+                break;
+                
+            case 'reset_database':
+                try {
+                    // Get config for connection
+                    $config = $this->database->getConfig();
+                    $host = $config['host'] ?? 'localhost';
+                    $username = $config['username'] ?? 'root';
+                    $password = $config['password'] ?? '';
+                    $dbName = $config['db_name'] ?? 'iot_device_manager';
+                    
+                    // Connect without specifying database
+                    $conn = new PDO("mysql:host=$host", $username, $password);
+                    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                    
+                    // Drop database
+                    $conn->exec("DROP DATABASE IF EXISTS `$dbName`");
+                    
+                    // Reset this instance
+                    $this->database = new Database();
+                    
+                    $logs = [
+                        "✅ Database '$dbName' dropped successfully",
+                        "✅ Database connection reset"
+                    ];
+                    $this->sendResponse(true, 'Database reset successfully', ['logs' => $logs]);
+                } catch (Exception $e) {
+                    $this->sendResponse(false, 'Reset failed: ' . $e->getMessage(), ['logs' => ["❌ Reset failed: " . $e->getMessage()]]);
+                }
+                break;
+                
+            case 'setup_all':
+                $logs = [];
+                $success = true;
+                
+                try {
+                    // Create database
+                    $status = $this->getFreshStatus();
+                    if (!$status['database_exists']) {
+                        if ($this->database->createDatabase()) {
+                            $logs[] = "✅ Database created successfully";
+                        } else {
+                            $logs[] = "❌ Failed to create database";
+                            $success = false;
+                        }
+                    } else {
+                        $logs[] = "ℹ️ Database already exists";
+                    }
+                    
+                    // Create tables
+                    if ($success) {
+                        $status = $this->getFreshStatus();
+                        if (count($status['tables']) < 6) {
+                            if ($this->database->createTables()) {
+                                $logs[] = "✅ All tables created successfully";
+                                $logs[] = "✅ Views, procedures, functions, and indexes created";
+                            } else {
+                                $logs[] = "❌ Failed to create tables";
+                                $success = false;
+                            }
+                        } else {
+                            $logs[] = "ℹ️ Tables already exist";
+                        }
+                    }
+                    
+                    // Insert sample data
+                    if ($success) {
+                        $status = $this->getFreshStatus();
+                        if (count($status['tables']) >= 6) {
+                            $conn = $this->database->getConnection();
+                            $stmt = $conn->prepare("SELECT COUNT(*) FROM users");
+                            $stmt->execute();
+                            $userCount = $stmt->fetchColumn();
+                            
+                            if ($userCount == 0) {
+                                if ($this->database->insertSampleData()) {
+                                    $logs[] = "✅ Comprehensive sample data inserted successfully";
+                                    $logs[] = "✅ 18 devices, 6 locations, 30 days of logs added";
+                                } else {
+                                    $logs[] = "❌ Failed to insert sample data";
+                                    $success = false;
+                                }
+                            } else {
+                                $logs[] = "ℹ️ Sample data already exists";
+                            }
+                        }
+                    }
+                    
+                    if ($success) {
+                        $logs[] = "🎉 Complete database setup finished!";
+                    }
+                    
+                    $message = $success ? 'Complete setup successful' : 'Setup partially completed';
+                    $this->sendResponse($success, $message, ['logs' => $logs]);
+                    
+                } catch (Exception $e) {
+                    $this->sendResponse(false, 'Setup failed: ' . $e->getMessage(), ['logs' => ["❌ Setup failed: " . $e->getMessage()]]);
+                }
+                break;
+                
+            default:
+                throw new Exception('Unknown action');
+        }
+    }
+    
+    private function getSQLContent($type, $name) {
+        $sqlDir = '../sql/';
+        $content = '';
+        
+        switch ($type) {
+            case 'create_database':
+                $content = file_get_contents($sqlDir . 'create_database.sql');
+                break;
+                
+            case 'table':
+                $content = file_get_contents($sqlDir . 'tables/' . $name . '.sql');
+                break;
+                
+            case 'view':
+                $content = file_get_contents($sqlDir . 'views/' . $name . '.sql');
+                break;
+                
+            case 'procedure':
+                $content = file_get_contents($sqlDir . 'procedures/' . $name . '.sql');
+                break;
+                
+            case 'function':
+                $content = file_get_contents($sqlDir . 'functions/' . $name . '.sql');
+                break;
+                
+            case 'procedures':
+                // Get all procedures
+                $procedures = glob($sqlDir . 'procedures/*.sql');
+                $allContent = [];
+                foreach ($procedures as $file) {
+                    $allContent[] = file_get_contents($file);
+                }
+                $content = implode("\n\n-- " . str_repeat("=", 50) . "\n\n", $allContent);
+                break;
+                
+            case 'functions':
+                // Get all functions
+                $functions = glob($sqlDir . 'functions/*.sql');
+                $allContent = [];
+                foreach ($functions as $file) {
+                    $allContent[] = file_get_contents($file);
+                }
+                $content = implode("\n\n-- " . str_repeat("=", 50) . "\n\n", $allContent);
+                break;
+                
+            default:
+                throw new Exception('Unknown SQL type');
+        }
+        
+        // Clean up the content
+        $content = trim($content);
+        
+        // Remove SQL comments for cleaner display if needed
+        // $content = preg_replace('/^--.*$/m', '', $content);
+        // $content = preg_replace('/^\s*$/m', '', $content);
+        
+        return $content;
+    }
+    
+    private function getFreshStatus() {
+        try {
+            $this->database->getConnection();
+            $status = $this->database->getDatabaseStatus();
+            $status['connection'] = true;
+            return $status;
+        } catch (Exception $e) {
+            return [
+                'connection' => false,
+                'database_exists' => false,
+                'tables' => [],
+                'views' => [],
+                'procedures' => [],
+                'functions' => [],
+                'table_row_counts' => []
+            ];
+        }
+    }
+    
+    private function sendResponse($success, $message, $data = null) {
+        $response = [
+            'success' => $success,
+            'message' => $message
+        ];
+        
+        if ($data !== null) {
+            $response['data'] = $data;
+        }
+        
+        echo json_encode($response);
+        exit;
+    }
+}
+
+// Handle the request
+$api = new DatabaseAPI();
+$api->handleRequest();
+?>

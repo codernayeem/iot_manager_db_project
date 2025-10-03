@@ -395,7 +395,7 @@ class Database {
      */
     public function getDatabaseStatus() {
         $status = [
-            'connected' => false,
+            'connection' => false,
             'database_exists' => false,
             'tables' => [],
             'views' => [],
@@ -411,9 +411,9 @@ class Database {
             }
             
             // Check connection
-            $status['connected'] = ($this->conn !== null);
+            $status['connection'] = ($this->conn !== null);
             
-            if (!$status['connected']) {
+            if (!$status['connection']) {
                 return $status;
             }
             
@@ -448,6 +448,9 @@ class Database {
             while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
                 $status['views'][] = $row[0];
             }
+
+            // Remove views from tables list for clarity
+            $status['tables'] = array_diff($status['tables'], $status['views']);
             
             // Get procedures
             $stmt = $this->conn->prepare("SHOW PROCEDURE STATUS WHERE Db = ?");
