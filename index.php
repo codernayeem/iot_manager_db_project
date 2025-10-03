@@ -226,7 +226,7 @@ $currentConfig = $database->getConfig();
                 </div>
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
             <!-- Database Actions -->
             <div>
                 <h3 class="text-md font-semibold text-gray-700 mb-3">Database Operations</h3>
@@ -280,28 +280,6 @@ $currentConfig = $database->getConfig();
                     <a href="dashboard.php" class="block bg-purple-600 text-white py-2 px-3 rounded text-center hover:bg-purple-700 transition text-sm">
                         <i class="fas fa-tachometer-alt mr-1"></i>Dashboard
                     </a>
-                </div>
-            </div>
-            
-            <!-- Additional Tools -->
-            <div>
-                <h3 class="text-md font-semibold text-gray-700 mb-3">Tools & Features</h3>
-                <div class="space-y-3">
-                    <a href="sql_features.php" class="block bg-green-600 text-white py-2 px-3 rounded text-center hover:bg-green-700 transition text-sm">
-                        <i class="fas fa-code mr-1"></i>SQL Features
-                    </a>
-                    
-                    <a href="analytics.php" class="block bg-indigo-600 text-white py-2 px-3 rounded text-center hover:bg-indigo-700 transition text-sm">
-                        <i class="fas fa-chart-line mr-1"></i>Analytics
-                    </a>
-                    
-                    <a href="api-test.html" class="block bg-yellow-600 text-white py-2 px-3 rounded text-center hover:bg-yellow-700 transition text-sm">
-                        <i class="fas fa-flask mr-1"></i>API Test
-                    </a>
-                    
-                    <button onclick="window.dbManager?.refreshStatus()" class="w-full bg-gray-600 text-white py-2 px-3 rounded hover:bg-gray-700 transition text-sm">
-                        <i class="fas fa-sync mr-1"></i>Refresh Status
-                    </button>
                 </div>
             </div>
             </div>

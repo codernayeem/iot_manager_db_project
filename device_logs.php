@@ -33,6 +33,7 @@ if ($_POST && isset($_POST['resolve_log'])) {
 
 // Filter parameters
 $deviceFilter = isset($_GET['device']) ? (int)$_GET['device'] : 0;
+$locationFilter = isset($_GET['location']) ? (int)$_GET['location'] : 0;
 $typeFilter = isset($_GET['log_type']) ? $_GET['log_type'] : '';
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
@@ -51,6 +52,11 @@ $params = [];
 if ($deviceFilter > 0) {
     $whereConditions[] = "dl.d_id = ?";
     $params[] = $deviceFilter;
+}
+
+if ($locationFilter > 0) {
+    $whereConditions[] = "EXISTS (SELECT 1 FROM deployments dep_filter WHERE dep_filter.d_id = dl.d_id AND dep_filter.loc_id = ? AND dep_filter.is_active = 1)";
+    $params[] = $locationFilter;
 }
 
 if (!empty($typeFilter)) {
@@ -338,7 +344,7 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
         
         <!-- Filters -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <form method="GET" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <div>
                     <label for="device" class="block text-sm font-medium text-gray-700 mb-2">Device</label>
                     <select id="device" name="device" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
@@ -346,6 +352,23 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                         <?php foreach ($devices as $device): ?>
                             <option value="<?php echo $device['d_id']; ?>" <?php echo $deviceFilter == $device['d_id'] ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($device['d_name']) . ' (' . htmlspecialchars($device['device_type']) . ')'; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="location" class="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                    <select id="location" name="location" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Locations</option>
+                        <?php 
+                        $locationsQuery = "SELECT loc_id, loc_name FROM locations ORDER BY loc_name";
+                        $locationsStmt = $conn->prepare($locationsQuery);
+                        $locationsStmt->execute();
+                        $logLocations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
+                        foreach ($logLocations as $location): ?>
+                            <option value="<?php echo $location['loc_id']; ?>" <?php echo $locationFilter == $location['loc_id'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($location['loc_name']); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -426,7 +449,7 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
         <div class="flex justify-between items-center mb-6">
             <div class="text-gray-600">
                 Showing <?php echo count($logs); ?> of <?php echo number_format($totalLogs); ?> logs
-                <?php if (!empty($search) || $deviceFilter || !empty($typeFilter) || !empty($statusFilter) || !empty($dateFrom) || !empty($dateTo)): ?>
+                <?php if (!empty($search) || $deviceFilter || $locationFilter || !empty($typeFilter) || !empty($statusFilter) || !empty($dateFrom) || !empty($dateTo)): ?>
                     (filtered)
                 <?php endif; ?>
             </div>

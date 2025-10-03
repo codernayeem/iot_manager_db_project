@@ -39,6 +39,60 @@ if ($_POST) {
             $error = "Please fill in required fields.";
         }
     }
+    
+    // Handle edit location
+    if (isset($_POST['edit_location'])) {
+        $locId = (int)$_POST['loc_id'];
+        $locName = trim($_POST['edit_loc_name']);
+        $address = trim($_POST['edit_address']);
+        $latitude = !empty($_POST['edit_latitude']) ? (float)$_POST['edit_latitude'] : null;
+        $longitude = !empty($_POST['edit_longitude']) ? (float)$_POST['edit_longitude'] : null;
+        
+        if (!empty($locName) && !empty($address) && $locId > 0) {
+            // SQL Feature: UPDATE with geospatial data
+            $sql = "UPDATE locations SET loc_name = ?, address = ?, latitude = ?, longitude = ?, updated_at = CURRENT_TIMESTAMP WHERE loc_id = ?";
+            $stmt = $conn->prepare($sql);
+            if ($stmt->execute([$locName, $address, $latitude, $longitude, $locId])) {
+                $message = "Location updated successfully!";
+            } else {
+                $error = "Failed to update location.";
+            }
+        } else {
+            $error = "Please fill in required fields.";
+        }
+    }
+    
+    // Handle delete location (admin only)
+    if (isset($_POST['delete_location']) && $_SESSION['user_email'] == 'admin@iot.com') {
+        $locId = (int)$_POST['delete_loc_id'];
+        
+        if ($locId > 0) {
+            try {
+                // SQL Feature: Transaction with multiple operations
+                $conn->beginTransaction();
+                
+                // First, deactivate all deployments for this location
+                $deactivateDeployments = "UPDATE deployments SET is_active = FALSE WHERE loc_id = ?";
+                $stmt = $conn->prepare($deactivateDeployments);
+                $stmt->execute([$locId]);
+                
+                // Then delete the location
+                $deleteLocation = "DELETE FROM locations WHERE loc_id = ?";
+                $stmt = $conn->prepare($deleteLocation);
+                $stmt->execute([$locId]);
+                
+                $conn->commit();
+                $message = "Location deleted successfully! All devices have been unlinked from this location.";
+            } catch (Exception $e) {
+                $conn->rollback();
+                $error = "Failed to delete location: " . $e->getMessage();
+            }
+        } else {
+            $error = "Invalid location ID.";
+        }
+    } elseif (isset($_POST['delete_location']) && $_SESSION['user_email'] != 'admin@iot.com') {
+        $error = "Access denied. Only admin can delete locations.";
+    }
 }
 
 // SQL Feature: Complex query with geospatial calculations and multiple aggregations
@@ -428,16 +482,36 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
                         </div>
                         
                         <!-- Action Buttons -->
-                        <div class="flex space-x-2">
-                            <a href="devices.php?location=<?php echo $location['loc_id']; ?>" 
-                               class="flex-1 bg-blue-600 text-white text-center py-2 rounded text-sm hover:bg-blue-700 transition">
-                                <i class="fas fa-eye mr-1"></i>View Devices
-                            </a>
+                        <div class="flex justify-between items-center">
+                            <div class="flex space-x-2">
+                                <a href="devices.php?location=<?php echo $location['loc_id']; ?>" 
+                                   class="bg-blue-100 text-blue-600 px-3 py-2 rounded text-sm hover:bg-blue-200 transition"
+                                   title="View Devices">
+                                    <i class="fas fa-microchip"></i>
+                                </a>
+                                
+                                <a href="device_logs.php?location=<?php echo $location['loc_id']; ?>" 
+                                   class="bg-purple-100 text-purple-600 px-3 py-2 rounded text-sm hover:bg-purple-200 transition"
+                                   title="View Logs">
+                                    <i class="fas fa-list"></i>
+                                </a>
+                            </div>
                             
-                            <a href="device_logs.php?location=<?php echo $location['loc_id']; ?>" 
-                               class="flex-1 bg-purple-600 text-white text-center py-2 rounded text-sm hover:bg-purple-700 transition">
-                                <i class="fas fa-list mr-1"></i>View Logs
-                            </a>
+                            <div class="flex space-x-2">
+                                <button onclick="openEditModal(<?php echo htmlspecialchars(json_encode($location)); ?>)" 
+                                        class="bg-gray-100 text-gray-600 px-3 py-2 rounded text-sm hover:bg-gray-200 transition"
+                                        title="Edit Location">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                
+                                <?php if ($_SESSION['user_email'] == 'admin@iot.com'): ?>
+                                <button onclick="confirmDelete(<?php echo $location['loc_id']; ?>, '<?php echo htmlspecialchars($location['loc_name']); ?>')" 
+                                        class="bg-red-100 text-red-600 px-3 py-2 rounded text-sm hover:bg-red-200 transition"
+                                        title="Delete Location">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     <?php else: ?>
                         <div class="text-center py-4">
@@ -509,10 +583,135 @@ ORDER BY total_devices DESC, active_devices DESC;</pre>
         </div>
     </div>
     
+    <!-- Edit Location Modal -->
+    <div id="editModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                    <i class="fas fa-edit mr-2"></i>Edit Location
+                </h3>
+                
+                <form method="POST" id="editForm">
+                    <input type="hidden" name="loc_id" id="edit_loc_id">
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label for="edit_loc_name" class="block text-sm font-medium text-gray-700 mb-2">
+                                Location Name *
+                            </label>
+                            <input type="text" id="edit_loc_name" name="edit_loc_name" required
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label for="edit_address" class="block text-sm font-medium text-gray-700 mb-2">
+                                Address *
+                            </label>
+                            <input type="text" id="edit_address" name="edit_address" required
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label for="edit_latitude" class="block text-sm font-medium text-gray-700 mb-2">
+                                Latitude (Optional)
+                            </label>
+                            <input type="number" id="edit_latitude" name="edit_latitude" step="0.000001" min="-90" max="90"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label for="edit_longitude" class="block text-sm font-medium text-gray-700 mb-2">
+                                Longitude (Optional)
+                            </label>
+                            <input type="number" id="edit_longitude" name="edit_longitude" step="0.000001" min="-180" max="180"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between items-center mt-6">
+                        <button type="button" onclick="closeEditModal()" class="text-gray-600 hover:text-gray-800">
+                            <i class="fas fa-times mr-2"></i>Cancel
+                        </button>
+                        
+                        <button type="submit" name="edit_location" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition">
+                            <i class="fas fa-save mr-2"></i>Update Location
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+                <h3 class="text-lg font-bold text-red-800 mb-4">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>Confirm Delete
+                </h3>
+                
+                <p class="text-gray-600 mb-6">
+                    Are you sure you want to delete <strong id="delete_location_name"></strong>? 
+                    This will unlink all devices from this location and cannot be undone.
+                </p>
+                
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-triangle text-yellow-400"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700">
+                                <strong>Warning:</strong> All devices deployed at this location will be unlinked but not deleted.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <form method="POST" id="deleteForm">
+                    <input type="hidden" name="delete_loc_id" id="delete_loc_id">
+                    
+                    <div class="flex justify-between items-center">
+                        <button type="button" onclick="closeDeleteModal()" class="text-gray-600 hover:text-gray-800">
+                            <i class="fas fa-times mr-2"></i>Cancel
+                        </button>
+                        
+                        <button type="submit" name="delete_location" class="bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 transition">
+                            <i class="fas fa-trash mr-2"></i>Delete Location
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
     <script>
         function toggleAddForm() {
             const form = document.getElementById('addLocationForm');
             form.classList.toggle('hidden');
+        }
+        
+        function openEditModal(location) {
+            document.getElementById('edit_loc_id').value = location.loc_id;
+            document.getElementById('edit_loc_name').value = location.loc_name;
+            document.getElementById('edit_address').value = location.address;
+            document.getElementById('edit_latitude').value = location.latitude || '';
+            document.getElementById('edit_longitude').value = location.longitude || '';
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+        
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+        }
+        
+        function confirmDelete(locId, locName) {
+            document.getElementById('delete_loc_id').value = locId;
+            document.getElementById('delete_location_name').textContent = locName;
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+        
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.add('hidden');
         }
         
         // Auto-fill coordinates based on address (placeholder for geolocation API)
@@ -521,6 +720,16 @@ ORDER BY total_devices DESC, active_devices DESC;</pre>
             // For demo purposes, we'll show the concept
             console.log('Address entered:', this.value);
             // geocodeAddress(this.value);
+        });
+        
+        // Close modals when clicking outside
+        document.addEventListener('click', function(e) {
+            if (e.target.id === 'editModal') {
+                closeEditModal();
+            }
+            if (e.target.id === 'deleteModal') {
+                closeDeleteModal();
+            }
         });
     </script>
 </body>

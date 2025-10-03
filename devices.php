@@ -24,6 +24,7 @@ $offset = ($page - 1) * $limit;
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $typeFilter = isset($_GET['type']) ? (int)$_GET['type'] : 0;
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
+$locationFilter = isset($_GET['location']) ? (int)$_GET['location'] : 0;
 $sortBy = isset($_GET['sort']) ? $_GET['sort'] : 'updated_at';
 $sortOrder = isset($_GET['order']) ? $_GET['order'] : 'DESC';
 
@@ -45,6 +46,11 @@ if ($typeFilter > 0) {
 if (!empty($statusFilter)) {
     $whereConditions[] = "d.status = ?";
     $params[] = $statusFilter;
+}
+
+if ($locationFilter > 0) {
+    $whereConditions[] = "EXISTS (SELECT 1 FROM deployments dep_filter WHERE dep_filter.d_id = d.d_id AND dep_filter.loc_id = ? AND dep_filter.is_active = 1)";
+    $params[] = $locationFilter;
 }
 
 $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereConditions) : "";
@@ -203,7 +209,7 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
         
         <!-- Search and Filter Form -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                 <div>
                     <label for="search" class="block text-sm font-medium text-gray-700 mb-2">Search</label>
                     <input type="text" 
@@ -234,6 +240,23 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                         <option value="inactive" <?php echo $statusFilter === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
                         <option value="maintenance" <?php echo $statusFilter === 'maintenance' ? 'selected' : ''; ?>>Maintenance</option>
                         <option value="error" <?php echo $statusFilter === 'error' ? 'selected' : ''; ?>>Error</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="location" class="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                    <select id="location" name="location" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Locations</option>
+                        <?php 
+                        $locationsQuery = "SELECT loc_id, loc_name FROM locations ORDER BY loc_name";
+                        $locationsStmt = $conn->prepare($locationsQuery);
+                        $locationsStmt->execute();
+                        $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
+                        foreach ($locations as $location): ?>
+                            <option value="<?php echo $location['loc_id']; ?>" <?php echo $locationFilter == $location['loc_id'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($location['loc_name']); ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 
@@ -283,7 +306,7 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="flex justify-between items-center mb-6">
             <div class="text-gray-600">
                 Showing <?php echo count($devices); ?> of <?php echo $totalDevices; ?> devices
-                <?php if (!empty($search) || $typeFilter || !empty($statusFilter)): ?>
+                <?php if (!empty($search) || $typeFilter || !empty($statusFilter) || $locationFilter): ?>
                     (filtered)
                 <?php endif; ?>
             </div>

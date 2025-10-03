@@ -173,8 +173,8 @@ if ($_POST) {
         <div class="mt-6 bg-gray-100 p-4 rounded-md">
             <h3 class="font-semibold text-gray-700 mb-2">Demo Accounts:</h3>
             <div class="text-sm text-gray-600 space-y-1">
-                <p><strong>Admin:</strong> admin@iot.com / admin123</p>
-                <p><strong>User:</strong> john.doe@email.com / password123</p>
+                <p><strong>Admin:</strong> admin@iot.com / 123456</p>
+                <p><strong>User:</strong> john.doe@email.com / 123456</p>
             </div>
         </div>
     </div>
