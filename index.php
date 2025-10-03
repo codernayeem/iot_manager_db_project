@@ -48,7 +48,9 @@ $currentConfig = $database->getConfig();
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
+    <?php include 'components/navbar.php'; ?>
+    
+        <div class="container mx-auto px-4 py-8">
         <!-- Header -->
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center space-x-3">
@@ -376,5 +378,8 @@ $currentConfig = $database->getConfig();
             }
         }
     </script>
+    
+        </div> <!-- End container -->
+    </div> <!-- End main-content wrapper -->
 </body>
 </html>

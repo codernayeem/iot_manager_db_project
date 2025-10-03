@@ -589,17 +589,7 @@ class DatabaseManager {
             </div>
         `;
 
-        // Action buttons
-        const actionsHtml = `
-            <div class="flex justify-end space-x-3">
-                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                        onclick="databaseManager.showSQLModal('table', '${table_name}')">
-                    <i class="fas fa-code mr-2"></i>View CREATE TABLE SQL
-                </button>
-            </div>
-        `;
-
-        return summaryHtml + columnsHtml + foreignKeysHtml + indexesHtml + actionsHtml;
+        return summaryHtml + columnsHtml + foreignKeysHtml + indexesHtml;
     }
 
     async showSQLModal(type, name = '') {
