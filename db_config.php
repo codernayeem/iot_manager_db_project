@@ -130,16 +130,12 @@ $dbStatus = $database->getDatabaseStatus();
 <body>
     
     <div class="container-fluid mt-3">
-        <div class="compact-header">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-1"><i class="fas fa-database"></i> Database Configuration</h2>
-                    <small class="text-muted">Manage database connection settings and test connectivity</small>
-                </div>
-                <a href="index.php" class="btn btn-outline-secondary btn-sm">
-                    <i class="fas fa-arrow-left"></i> Dashboard
-                </a>
+        <div class="compact-header d-flex justify-content-between align-items-center">
+            <div>
+            <h2 class="mb-1"><i class="fas fa-database"></i> Database Configuration</h2>
+            <small class="text-muted">Manage database connection settings and test connectivity</small>
             </div>
+            <a href="index.php" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> Dashboard</a>
         </div>
         
         <!-- Message Display -->
@@ -160,8 +156,8 @@ $dbStatus = $database->getDatabaseStatus();
                     <div class="status-row">
                         <span><strong>Connection:</strong></span>
                         <span>
-                            <span class="status-indicator <?php echo $dbStatus['connected'] ? 'status-connected' : 'status-disconnected'; ?>"></span>
-                            <?php echo $dbStatus['connected'] ? 'Connected' : 'Disconnected'; ?>
+                            <span class="status-indicator <?php echo $dbStatus['connection'] ? 'status-connected' : 'status-disconnected'; ?>"></span>
+                            <?php echo $dbStatus['connection'] ? 'Connected' : 'Disconnected'; ?>
                         </span>
                     </div>
                     
@@ -186,7 +182,7 @@ $dbStatus = $database->getDatabaseStatus();
                     <?php if ($dbStatus['database_exists']): ?>
                         <div class="status-row">
                             <span><strong>Objects:</strong></span>
-                            <small>T:<?php echo count(array_diff($dbStatus['tables'], $dbStatus['views'])); ?> | V:<?php echo count($dbStatus['views']); ?> | P:<?php echo count($dbStatus['procedures']); ?> | F:<?php echo count($dbStatus['functions']); ?></small>
+                            <small>T:<?php echo count($dbStatus['tables']); ?> | V:<?php echo count($dbStatus['views']); ?> | P:<?php echo count($dbStatus['procedures']); ?> | F:<?php echo count($dbStatus['functions']); ?></small>
                         </div>
                     <?php endif; ?>
                     
@@ -310,7 +306,7 @@ $dbStatus = $database->getDatabaseStatus();
         </div>
         
         <!-- Additional Actions -->
-        <?php if ($dbStatus['connected'] && !$dbStatus['database_exists']): ?>
+        <?php if ($dbStatus['connection'] && !$dbStatus['database_exists']): ?>
         <div class="row mt-3">
             <div class="col-12">
                 <div class="alert alert-warning d-flex justify-content-between align-items-center">

@@ -50,11 +50,18 @@ $currentConfig = $database->getConfig();
 <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
         <!-- Header -->
-        <div class="text-center mb-6">
-            <i class="fas fa-database text-3xl text-blue-600 mb-2"></i>
-            <h1 class="text-2xl font-bold text-gray-800 mb-1">IoT Device Manager</h1>
-            <p class="text-md text-gray-600">Database Management Dashboard</p>
-        
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-database text-2xl text-blue-600"></i>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-800">IoT Device Manager</h1>
+                    <p class="text-sm text-gray-600">Database Management Dashboard</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-600"><strong>Md. Nayeem</strong> (2107050)</p>
+                <a href="https://github.com/codernayeem" class="text-blue-600 hover:underline">@codernayeem</a>
+            </div>
         </div>
         
         <!-- Messages -->

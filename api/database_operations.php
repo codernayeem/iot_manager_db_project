@@ -81,6 +81,15 @@ class DatabaseAPI {
                 }
                 break;
                 
+            case 'table_structure':
+                $tableName = $_GET['table'] ?? '';
+                if (!$tableName) {
+                    throw new Exception('Table name is required');
+                }
+                $structure = $this->getTableStructure($tableName);
+                $this->sendResponse(true, 'Table structure retrieved', $structure);
+                break;
+                
             case 'sql_content':
                 $type = $_GET['type'] ?? '';
                 $name = $_GET['name'] ?? '';
@@ -317,6 +326,71 @@ class DatabaseAPI {
                 'functions' => [],
                 'table_row_counts' => []
             ];
+        }
+    }
+    
+    private function getTableStructure($tableName) {
+        try {
+            $conn = $this->database->getConnection();
+            $dbName = $this->database->getConfig()['db_name'];
+            
+            // Get column information
+            $stmt = $conn->prepare("
+                SELECT 
+                    COLUMN_NAME,
+                    DATA_TYPE,
+                    IS_NULLABLE,
+                    COLUMN_DEFAULT,
+                    CHARACTER_MAXIMUM_LENGTH,
+                    NUMERIC_PRECISION,
+                    NUMERIC_SCALE,
+                    COLUMN_KEY,
+                    EXTRA,
+                    COLUMN_COMMENT
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+                ORDER BY ORDINAL_POSITION
+            ");
+            $stmt->execute([$dbName, $tableName]);
+            $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Get foreign key constraints
+            $stmt = $conn->prepare("
+                SELECT 
+                    kcu.COLUMN_NAME,
+                    kcu.REFERENCED_TABLE_NAME,
+                    kcu.REFERENCED_COLUMN_NAME,
+                    rc.UPDATE_RULE,
+                    rc.DELETE_RULE
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+                JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc 
+                    ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+                WHERE kcu.TABLE_SCHEMA = ? AND kcu.TABLE_NAME = ?
+                AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
+            ");
+            $stmt->execute([$dbName, $tableName]);
+            $foreignKeys = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Get indexes
+            $stmt = $conn->prepare("SHOW INDEX FROM `$tableName`");
+            $stmt->execute();
+            $indexes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Get table row count
+            $stmt = $conn->prepare("SELECT COUNT(*) FROM `$tableName`");
+            $stmt->execute();
+            $rowCount = $stmt->fetchColumn();
+            
+            return [
+                'table_name' => $tableName,
+                'columns' => $columns,
+                'foreign_keys' => $foreignKeys,
+                'indexes' => $indexes,
+                'row_count' => $rowCount
+            ];
+            
+        } catch (Exception $e) {
+            throw new Exception('Failed to get table structure: ' . $e->getMessage());
         }
     }
     
