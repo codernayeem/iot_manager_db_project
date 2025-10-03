@@ -18,6 +18,24 @@ $database->getConnection();
 // Get current database status first
 try {
     $dbStatus = $database->getDatabaseStatus();
+    
+    // Get table row counts if database exists
+    if ($dbStatus['database_exists'] && count($dbStatus['tables']) > 0) {
+        $conn = $database->getConnection();
+        $tableRowCounts = [];
+        foreach ($dbStatus['tables'] as $table) {
+            try {
+                $stmt = $conn->prepare("SELECT COUNT(*) FROM `$table`");
+                $stmt->execute();
+                $tableRowCounts[$table] = $stmt->fetchColumn();
+            } catch (Exception $e) {
+                $tableRowCounts[$table] = 0;
+            }
+        }
+        $dbStatus['table_row_counts'] = $tableRowCounts;
+    } else {
+        $dbStatus['table_row_counts'] = [];
+    }
 } catch (Exception $e) {
     $dbStatus = [
         'connected' => false,
@@ -26,7 +44,8 @@ try {
         'views' => [],
         'procedures' => [],
         'functions' => [],
-        'table_info' => []
+        'table_info' => [],
+        'table_row_counts' => []
     ];
     $error = "Status check failed: " . $e->getMessage();
 }
@@ -133,6 +152,24 @@ if (isset($_POST['action'])) {
 if (isset($_POST['action'])) {
     try {
         $dbStatus = $database->getDatabaseStatus();
+        
+        // Get table row counts if database exists
+        if ($dbStatus['database_exists'] && count($dbStatus['tables']) > 0) {
+            $conn = $database->getConnection();
+            $tableRowCounts = [];
+            foreach ($dbStatus['tables'] as $table) {
+                try {
+                    $stmt = $conn->prepare("SELECT COUNT(*) FROM `$table`");
+                    $stmt->execute();
+                    $tableRowCounts[$table] = $stmt->fetchColumn();
+                } catch (Exception $e) {
+                    $tableRowCounts[$table] = 0;
+                }
+            }
+            $dbStatus['table_row_counts'] = $tableRowCounts;
+        } else {
+            $dbStatus['table_row_counts'] = [];
+        }
     } catch (Exception $e) {
         $error .= " Status refresh failed: " . $e->getMessage();
     }
@@ -241,8 +278,9 @@ if (isset($_POST['action'])) {
                                     <?php echo $table; ?>:
                                 </span>
                                 <span class="<?php echo in_array($table, $dbStatus['tables']) ? 'status-good' : 'status-missing'; ?>"
-                                      onmouseover="showTooltip(this, 'CREATE TABLE <?php echo $table; ?> (...)')"
-                                      onmouseout="hideTooltip()">
+                                      onclick="showSQLModal('table_<?php echo $table; ?>')"
+                                      title="Click to see CREATE TABLE SQL"
+                                      style="cursor: pointer;">
                                     <i class="fas fa-<?php echo in_array($table, $dbStatus['tables']) ? 'check' : 'times'; ?>"></i>
                                 </span>
                             </div>
@@ -304,35 +342,89 @@ if (isset($_POST['action'])) {
             </div>
         </div>
         
+        <!-- Table Overview Section -->
+        <?php if ($dbStatus['database_exists'] && count($dbStatus['tables']) > 0): ?>
+        <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-table mr-2"></i>Table Overview
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <?php foreach ($dbStatus['tables'] as $table): ?>
+                <div class="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition cursor-pointer"
+                     onclick="showTableModal('<?php echo $table; ?>')">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-semibold text-gray-800 text-sm">
+                            <i class="fas fa-table mr-1 text-blue-600"></i>
+                            <?php echo $table; ?>
+                        </h3>
+                        <span class="text-xs text-gray-500 bg-white px-2 py-1 rounded">
+                            <?php echo isset($dbStatus['table_row_counts'][$table]) ? number_format($dbStatus['table_row_counts'][$table]) : '0'; ?> rows
+                        </span>
+                    </div>
+                    
+                    <div class="text-xs text-gray-600 space-y-1">
+                        <?php 
+                        $descriptions = [
+                            'users' => 'System users and administrators',
+                            'device_types' => 'Categories of IoT devices',
+                            'devices' => 'Registered IoT devices',
+                            'locations' => 'Device deployment locations',
+                            'deployments' => 'Device-location assignments',
+                            'device_logs' => 'Device activity and error logs'
+                        ];
+                        echo $descriptions[$table] ?? 'Database table';
+                        ?>
+                    </div>
+                    
+                    <div class="mt-3 flex justify-between items-center">
+                        <span class="text-xs text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-info-circle mr-1"></i>View Details
+                        </span>
+                        <span class="text-xs text-green-600 hover:text-green-800"
+                              onclick="event.stopPropagation(); showSQLModal('table_<?php echo $table; ?>')">
+                            <i class="fas fa-code mr-1"></i>View SQL
+                        </span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+        
         <!-- Management Actions -->
         <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
             <h2 class="text-lg font-bold text-gray-800 mb-4">
-                <i class="fas fa-cogs mr-2"></i>Database Management
+            <i class="fas fa-cogs mr-2"></i>Database Management & Application Access
             </h2>
             
             <!-- Do All Button -->
             <div class="mb-4">
-                <form method="POST" class="text-center">
-                    <input type="hidden" name="action" value="do_all">
-                    <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition text-sm font-medium"
-                            onmouseover="showTooltip(this, 'CREATE DATABASE + CREATE TABLES + INSERT DATA')"
-                            onmouseout="hideTooltip()">
-                        <i class="fas fa-magic mr-2"></i>Setup Complete Database
-                    </button>
-                    <p class="text-xs text-gray-500 mt-1">Creates database, tables, views, procedures, functions & inserts sample data</p>
-                </form>
+            <form method="POST" class="text-center">
+                <input type="hidden" name="action" value="do_all">
+                <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition text-sm font-medium"
+                    onmouseover="showTooltip(this, 'CREATE DATABASE + CREATE TABLES + INSERT DATA')"
+                    onmouseout="hideTooltip()">
+                <i class="fas fa-magic mr-2"></i>Setup Complete Database
+                </button>
+                <p class="text-xs text-gray-500 mt-1">Creates database, tables, views, procedures, functions & inserts sample data</p>
+            </form>
             </div>
             
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="grid grid-cols-2 gap-6">
+            <!-- Left Side - Database Actions -->
+            <div>
+                <h3 class="text-md font-semibold text-gray-700 mb-3">Database Operations</h3>
+                <div class="space-y-3">
                 <!-- Create Database -->
                 <form method="POST">
                     <input type="hidden" name="action" value="create_database">
                     <button type="submit" class="w-full bg-blue-600 text-white py-2 px-3 rounded hover:bg-blue-700 transition text-sm <?php echo $dbStatus['database_exists'] ? 'opacity-50 cursor-not-allowed' : ''; ?>" 
-                            <?php echo $dbStatus['database_exists'] ? 'disabled' : ''; ?>
-                            onmouseover="showTooltip(this, 'CREATE DATABASE iot_device_manager')"
-                            onmouseout="hideTooltip()">
-                        <i class="fas fa-database mr-1"></i>
-                        Create DB
+                        <?php echo $dbStatus['database_exists'] ? 'disabled' : ''; ?>
+                        onmouseover="showTooltip(this, 'CREATE DATABASE iot_device_manager')"
+                        onmouseout="hideTooltip()">
+                    <i class="fas fa-database mr-1"></i>
+                    Create Database
                     </button>
                 </form>
                 
@@ -340,11 +432,11 @@ if (isset($_POST['action'])) {
                 <form method="POST">
                     <input type="hidden" name="action" value="create_tables">
                     <button type="submit" class="w-full bg-green-600 text-white py-2 px-3 rounded hover:bg-green-700 transition text-sm <?php echo !$dbStatus['database_exists'] ? 'opacity-50 cursor-not-allowed' : ''; ?>" 
-                            <?php echo !$dbStatus['database_exists'] ? 'disabled' : ''; ?>
-                            onmouseover="showTooltip(this, 'CREATE TABLES + VIEWS + PROCEDURES + FUNCTIONS')"
-                            onmouseout="hideTooltip()">
-                        <i class="fas fa-table mr-1"></i>
-                        Create Tables
+                        <?php echo !$dbStatus['database_exists'] ? 'disabled' : ''; ?>
+                        onmouseover="showTooltip(this, 'CREATE TABLES + VIEWS + PROCEDURES + FUNCTIONS')"
+                        onmouseout="hideTooltip()">
+                    <i class="fas fa-table mr-1"></i>
+                    Create Tables
                     </button>
                 </form>
                 
@@ -352,11 +444,11 @@ if (isset($_POST['action'])) {
                 <form method="POST">
                     <input type="hidden" name="action" value="insert_sample_data">
                     <button type="submit" class="w-full bg-orange-600 text-white py-2 px-3 rounded hover:bg-orange-700 transition text-sm <?php echo count($dbStatus['tables']) < 6 ? 'opacity-50 cursor-not-allowed' : ''; ?>" 
-                            <?php echo count($dbStatus['tables']) < 6 ? 'disabled' : ''; ?>
-                            onmouseover="showTooltip(this, 'INSERT INTO tables VALUES (...)')"
-                            onmouseout="hideTooltip()">
-                        <i class="fas fa-download mr-1"></i>
-                        Insert Data
+                        <?php echo count($dbStatus['tables']) < 6 ? 'disabled' : ''; ?>
+                        onmouseover="showTooltip(this, 'INSERT INTO tables VALUES (...)')"
+                        onmouseout="hideTooltip()">
+                    <i class="fas fa-download mr-1"></i>
+                    Insert Sample Data
                     </button>
                 </form>
                 
@@ -364,46 +456,37 @@ if (isset($_POST['action'])) {
                 <form method="POST" onsubmit="return confirm('This will delete ALL data. Are you sure?')">
                     <input type="hidden" name="action" value="reset_database">
                     <button type="submit" class="w-full bg-red-600 text-white py-2 px-3 rounded hover:bg-red-700 transition text-sm"
-                            onmouseover="showTooltip(this, 'DROP DATABASE iot_device_manager')"
-                            onmouseout="hideTooltip()">
-                        <i class="fas fa-trash mr-1"></i>
-                        Reset
+                        onmouseover="showTooltip(this, 'DROP DATABASE iot_device_manager')"
+                        onmouseout="hideTooltip()">
+                    <i class="fas fa-trash mr-1"></i>
+                    Reset Database
                     </button>
                 </form>
+                </div>
             </div>
-        </div>
-        
-        <!-- Navigation -->
-        <div class="bg-white rounded-lg shadow-sm p-4">
-            <h2 class="text-lg font-bold text-gray-800 mb-3">
-                <i class="fas fa-compass mr-2"></i>Application Access
-            </h2>
             
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <a href="login.php" class="bg-blue-600 text-white py-2 px-3 rounded text-center hover:bg-blue-700 transition text-sm">
+            <!-- Right Side - Application Access -->
+            <div>
+                <h3 class="text-md font-semibold text-gray-700 mb-3">Application Access</h3>
+                <div class="space-y-3">
+                <a href="login.php" class="block bg-blue-600 text-white py-2 px-3 rounded text-center hover:bg-blue-700 transition text-sm">
                     <i class="fas fa-sign-in-alt mr-1"></i>Login
                 </a>
                 
-                <a href="register.php" class="bg-gray-600 text-white py-2 px-3 rounded text-center hover:bg-gray-700 transition text-sm">
+                <a href="register.php" class="block bg-gray-600 text-white py-2 px-3 rounded text-center hover:bg-gray-700 transition text-sm">
                     <i class="fas fa-user-plus mr-1"></i>Register
                 </a>
                 
-                <a href="sql_features.php" class="bg-green-600 text-white py-2 px-3 rounded text-center hover:bg-green-700 transition text-sm">
+                <a href="sql_features.php" class="block bg-green-600 text-white py-2 px-3 rounded text-center hover:bg-green-700 transition text-sm">
                     <i class="fas fa-code mr-1"></i>SQL Features
                 </a>
                 
-                <a href="dashboard.php" class="bg-purple-600 text-white py-2 px-3 rounded text-center hover:bg-purple-700 transition text-sm">
+                <a href="dashboard.php" class="block bg-purple-600 text-white py-2 px-3 rounded text-center hover:bg-purple-700 transition text-sm">
                     <i class="fas fa-tachometer-alt mr-1"></i>Dashboard
                 </a>
-            </div>
-            
-            <!-- Default Credentials -->
-            <div class="mt-4 bg-gray-50 rounded p-3">
-                <h4 class="font-semibold text-gray-800 mb-2 text-sm">Default Login Credentials:</h4>
-                <div class="text-xs text-gray-600 space-y-1">
-                    <p><strong>Admin:</strong> admin@iotmanager.com / admin123</p>
-                    <p><strong>Technician:</strong> john.smith@tech.com / password123</p>
                 </div>
+                
+            </div>
             </div>
         </div>
     </div>
@@ -593,6 +676,135 @@ WHERE dl.log_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
 GROUP BY d.d_id, d.device_name, dt.t_name;</code></pre>
                             <p class="mt-2 text-sm text-gray-600">Complex view with JOINs, aggregation, and window functions.</p>
                         `;
+                    } else if (type.startsWith('table_')) {
+                        const tableName = type.replace('table_', '');
+                        title.textContent = 'CREATE TABLE: ' + tableName;
+                        
+                        const tableSQLs = {
+                            'users': `CREATE TABLE users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    f_name VARCHAR(50) NOT NULL,
+    l_name VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    user_type ENUM('admin', 'technician', 'viewer') DEFAULT 'technician',
+    phone VARCHAR(20),
+    department VARCHAR(50),
+    hire_date DATE,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_email (email),
+    INDEX idx_name (f_name, l_name),
+    INDEX idx_user_type (user_type),
+    INDEX idx_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;`,
+                            'device_types': `CREATE TABLE device_types (
+    type_id INT AUTO_INCREMENT PRIMARY KEY,
+    t_name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT,
+    manufacturer VARCHAR(100),
+    model VARCHAR(100),
+    power_consumption DECIMAL(8,2),
+    operating_temp_min INT,
+    operating_temp_max INT,
+    warranty_months INT DEFAULT 12,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_type_name (t_name),
+    INDEX idx_manufacturer (manufacturer)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;`,
+                            'devices': `CREATE TABLE devices (
+    d_id INT AUTO_INCREMENT PRIMARY KEY,
+    device_name VARCHAR(100) NOT NULL,
+    device_id VARCHAR(50) UNIQUE NOT NULL,
+    type_id INT,
+    status ENUM('active', 'inactive', 'maintenance', 'error') DEFAULT 'active',
+    ip_address VARCHAR(45),
+    mac_address VARCHAR(17),
+    firmware_version VARCHAR(20),
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    installation_date DATE,
+    warranty_expiry DATE,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (type_id) REFERENCES device_types(type_id) ON DELETE SET NULL,
+    INDEX idx_device_id (device_id),
+    INDEX idx_status (status),
+    INDEX idx_type (type_id),
+    INDEX idx_last_seen (last_seen)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;`,
+                            'locations': `CREATE TABLE locations (
+    loc_id INT AUTO_INCREMENT PRIMARY KEY,
+    loc_name VARCHAR(100) NOT NULL,
+    address TEXT,
+    city VARCHAR(50),
+    state VARCHAR(50),
+    country VARCHAR(50) DEFAULT 'USA',
+    postal_code VARCHAR(20),
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8),
+    timezone VARCHAR(50) DEFAULT 'UTC',
+    facility_type VARCHAR(50),
+    contact_person VARCHAR(100),
+    contact_phone VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_city (city),
+    INDEX idx_coordinates (latitude, longitude)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;`,
+                            'deployments': `CREATE TABLE deployments (
+    deployment_id INT AUTO_INCREMENT PRIMARY KEY,
+    d_id INT NOT NULL,
+    loc_id INT NOT NULL,
+    deployment_date DATE NOT NULL,
+    deployed_by INT,
+    installation_notes TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    maintenance_schedule ENUM('weekly', 'monthly', 'quarterly', 'annually') DEFAULT 'monthly',
+    next_maintenance DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (d_id) REFERENCES devices(d_id) ON DELETE CASCADE,
+    FOREIGN KEY (loc_id) REFERENCES locations(loc_id) ON DELETE CASCADE,
+    FOREIGN KEY (deployed_by) REFERENCES users(user_id) ON DELETE SET NULL,
+    UNIQUE KEY unique_active_deployment (d_id, is_active),
+    INDEX idx_location (loc_id),
+    INDEX idx_deployment_date (deployment_date),
+    INDEX idx_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;`,
+                            'device_logs': `CREATE TABLE device_logs (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    d_id INT NOT NULL,
+    log_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    log_type ENUM('info', 'warning', 'error', 'critical') DEFAULT 'info',
+    message TEXT NOT NULL,
+    error_code VARCHAR(20),
+    severity INT DEFAULT 1,
+    resolved BOOLEAN DEFAULT FALSE,
+    resolved_by INT,
+    resolved_at TIMESTAMP NULL,
+    resolution_notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (d_id) REFERENCES devices(d_id) ON DELETE CASCADE,
+    FOREIGN KEY (resolved_by) REFERENCES users(user_id) ON DELETE SET NULL,
+    INDEX idx_device_time (d_id, log_time),
+    INDEX idx_log_type (log_type),
+    INDEX idx_severity (severity),
+    INDEX idx_resolved (resolved),
+    INDEX idx_log_time (log_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;`
+                        };
+                        
+                        sqlContent = `
+                            <h4 class="font-bold mb-2">Table Creation SQL</h4>
+                            <pre class="bg-gray-800 text-green-400 p-4 rounded text-sm overflow-x-auto"><code>${tableSQLs[tableName] || 'SQL not available for this table'}</code></pre>
+                            <p class="mt-2 text-sm text-gray-600">Complete table definition with constraints, indexes, and foreign keys.</p>
+                        `;
                     }
             }
             
@@ -612,9 +824,24 @@ GROUP BY d.d_id, d.device_name, dt.t_name;</code></pre>
             
             title.textContent = 'Table: ' + tableName;
             
+            // Get row count for display
+            const rowCounts = <?php echo json_encode($dbStatus['table_row_counts'] ?? []); ?>;
+            
             // Table structure definitions
             const tableStructures = {
                 'users': `
+                    <div class="mb-4 bg-blue-50 p-3 rounded">
+                        <div class="flex justify-between items-center">
+                            <h4 class="font-bold text-blue-800">Table: users</h4>
+                            <div class="text-sm text-blue-600">
+                                <span class="mr-4"><i class="fas fa-table mr-1"></i>Rows: ${rowCounts.users || 0}</span>
+                                <button onclick="showSQLModal('table_users')" class="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700">
+                                    <i class="fas fa-code mr-1"></i>View SQL
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-blue-700 mt-1">System users and administrators</p>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full table-auto border border-gray-200">
                             <thead class="bg-gray-50">
@@ -631,20 +858,44 @@ GROUP BY d.d_id, d.device_name, dt.t_name;</code></pre>
                                 <tr><td class="border px-4 py-2 font-mono">l_name</td><td class="border px-4 py-2">VARCHAR(50)</td><td class="border px-4 py-2">NOT NULL</td><td class="border px-4 py-2">Last name</td></tr>
                                 <tr><td class="border px-4 py-2 font-mono">email</td><td class="border px-4 py-2">VARCHAR(100)</td><td class="border px-4 py-2">UNIQUE, NOT NULL</td><td class="border px-4 py-2">Email address</td></tr>
                                 <tr><td class="border px-4 py-2 font-mono">password</td><td class="border px-4 py-2">VARCHAR(255)</td><td class="border px-4 py-2">NOT NULL</td><td class="border px-4 py-2">Hashed password</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">user_type</td><td class="border px-4 py-2">ENUM</td><td class="border px-4 py-2">DEFAULT 'technician'</td><td class="border px-4 py-2">admin, technician, viewer</td></tr>
                                 <tr><td class="border px-4 py-2 font-mono">created_at</td><td class="border px-4 py-2">TIMESTAMP</td><td class="border px-4 py-2">DEFAULT CURRENT_TIMESTAMP</td><td class="border px-4 py-2">Creation timestamp</td></tr>
                                 <tr><td class="border px-4 py-2 font-mono">updated_at</td><td class="border px-4 py-2">TIMESTAMP</td><td class="border px-4 py-2">ON UPDATE CURRENT_TIMESTAMP</td><td class="border px-4 py-2">Last update timestamp</td></tr>
                             </tbody>
                         </table>
                     </div>
-                    <div class="mt-4">
-                        <h5 class="font-bold">Indexes:</h5>
-                        <ul class="text-sm text-gray-600 mt-2">
-                            <li>• <code>idx_email</code> - Index on email column for fast lookups</li>
-                            <li>• <code>idx_name</code> - Composite index on first_name, last_name</li>
-                        </ul>
+                    <div class="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                            <h5 class="font-bold">Indexes:</h5>
+                            <ul class="text-sm text-gray-600 mt-2">
+                                <li>• <code>idx_email</code> - Fast email lookups</li>
+                                <li>• <code>idx_name</code> - Name-based searches</li>
+                                <li>• <code>idx_user_type</code> - Role filtering</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h5 class="font-bold">Features:</h5>
+                            <ul class="text-sm text-gray-600 mt-2">
+                                <li>• Role-based access control</li>
+                                <li>• Automatic timestamps</li>
+                                <li>• Unique email constraint</li>
+                            </ul>
+                        </div>
                     </div>
                 `,
                 'devices': `
+                    <div class="mb-4 bg-green-50 p-3 rounded">
+                        <div class="flex justify-between items-center">
+                            <h4 class="font-bold text-green-800">Table: devices</h4>
+                            <div class="text-sm text-green-600">
+                                <span class="mr-4"><i class="fas fa-table mr-1"></i>Rows: ${rowCounts.devices || 0}</span>
+                                <button onclick="showSQLModal('table_devices')" class="bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700">
+                                    <i class="fas fa-code mr-1"></i>View SQL
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-green-700 mt-1">Registered IoT devices</p>
+                    </div>
                     <div class="overflow-x-auto">
                         <table class="min-w-full table-auto border border-gray-200">
                             <thead class="bg-gray-50">
@@ -662,14 +913,170 @@ GROUP BY d.d_id, d.device_name, dt.t_name;</code></pre>
                                 <tr><td class="border px-4 py-2 font-mono">type_id</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">FOREIGN KEY</td><td class="border px-4 py-2">References device_types(type_id)</td></tr>
                                 <tr><td class="border px-4 py-2 font-mono">status</td><td class="border px-4 py-2">ENUM</td><td class="border px-4 py-2">DEFAULT 'active'</td><td class="border px-4 py-2">active, inactive, maintenance, error</td></tr>
                                 <tr><td class="border px-4 py-2 font-mono">ip_address</td><td class="border px-4 py-2">VARCHAR(45)</td><td class="border px-4 py-2">NULL</td><td class="border px-4 py-2">IPv4/IPv6 address</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">firmware_version</td><td class="border px-4 py-2">VARCHAR(20)</td><td class="border px-4 py-2">NULL</td><td class="border px-4 py-2">Current firmware version</td></tr>
                                 <tr><td class="border px-4 py-2 font-mono">last_seen</td><td class="border px-4 py-2">TIMESTAMP</td><td class="border px-4 py-2">DEFAULT CURRENT_TIMESTAMP</td><td class="border px-4 py-2">Last communication</td></tr>
                             </tbody>
                         </table>
                     </div>
+                    <div class="mt-4 grid grid-cols-2 gap-4">
+                        <div>
+                            <h5 class="font-bold">Foreign Keys:</h5>
+                            <ul class="text-sm text-gray-600 mt-2">
+                                <li>• <code>fk_device_type</code> - devices.type_id → device_types.type_id</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h5 class="font-bold">Indexes:</h5>
+                            <ul class="text-sm text-gray-600 mt-2">
+                                <li>• <code>idx_device_id</code> - Unique device lookup</li>
+                                <li>• <code>idx_status</code> - Status filtering</li>
+                                <li>• <code>idx_last_seen</code> - Activity tracking</li>
+                            </ul>
+                        </div>
+                    </div>
+                `,
+                'device_types': `
+                    <div class="mb-4 bg-purple-50 p-3 rounded">
+                        <div class="flex justify-between items-center">
+                            <h4 class="font-bold text-purple-800">Table: device_types</h4>
+                            <div class="text-sm text-purple-600">
+                                <span class="mr-4"><i class="fas fa-table mr-1"></i>Rows: ${rowCounts.device_types || 0}</span>
+                                <button onclick="showSQLModal('table_device_types')" class="bg-purple-600 text-white px-3 py-1 rounded text-xs hover:bg-purple-700">
+                                    <i class="fas fa-code mr-1"></i>View SQL
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-purple-700 mt-1">Categories and specifications of IoT devices</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto border border-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="border px-4 py-2">Column</th>
+                                    <th class="border px-4 py-2">Type</th>
+                                    <th class="border px-4 py-2">Constraints</th>
+                                    <th class="border px-4 py-2">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td class="border px-4 py-2 font-mono">type_id</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">PRIMARY KEY, AUTO_INCREMENT</td><td class="border px-4 py-2">Type ID</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">t_name</td><td class="border px-4 py-2">VARCHAR(50)</td><td class="border px-4 py-2">NOT NULL, UNIQUE</td><td class="border px-4 py-2">Type name</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">description</td><td class="border px-4 py-2">TEXT</td><td class="border px-4 py-2">NULL</td><td class="border px-4 py-2">Type description</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">manufacturer</td><td class="border px-4 py-2">VARCHAR(100)</td><td class="border px-4 py-2">NULL</td><td class="border px-4 py-2">Device manufacturer</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">power_consumption</td><td class="border px-4 py-2">DECIMAL(8,2)</td><td class="border px-4 py-2">NULL</td><td class="border px-4 py-2">Power consumption in watts</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `,
+                'locations': `
+                    <div class="mb-4 bg-indigo-50 p-3 rounded">
+                        <div class="flex justify-between items-center">
+                            <h4 class="font-bold text-indigo-800">Table: locations</h4>
+                            <div class="text-sm text-indigo-600">
+                                <span class="mr-4"><i class="fas fa-table mr-1"></i>Rows: ${rowCounts.locations || 0}</span>
+                                <button onclick="showSQLModal('table_locations')" class="bg-indigo-600 text-white px-3 py-1 rounded text-xs hover:bg-indigo-700">
+                                    <i class="fas fa-code mr-1"></i>View SQL
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-indigo-700 mt-1">Device deployment locations with GPS coordinates</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto border border-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="border px-4 py-2">Column</th>
+                                    <th class="border px-4 py-2">Type</th>
+                                    <th class="border px-4 py-2">Constraints</th>
+                                    <th class="border px-4 py-2">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td class="border px-4 py-2 font-mono">loc_id</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">PRIMARY KEY, AUTO_INCREMENT</td><td class="border px-4 py-2">Location ID</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">loc_name</td><td class="border px-4 py-2">VARCHAR(100)</td><td class="border px-4 py-2">NOT NULL</td><td class="border px-4 py-2">Location name</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">address</td><td class="border px-4 py-2">TEXT</td><td class="border px-4 py-2">NULL</td><td class="border px-4 py-2">Street address</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">latitude</td><td class="border px-4 py-2">DECIMAL(10,8)</td><td class="border px-4 py-2">NULL</td><td class="border px-4 py-2">GPS latitude</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">longitude</td><td class="border px-4 py-2">DECIMAL(11,8)</td><td class="border px-4 py-2">NULL</td><td class="border px-4 py-2">GPS longitude</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">contact_person</td><td class="border px-4 py-2">VARCHAR(100)</td><td class="border px-4 py-2">NULL</td><td class="border px-4 py-2">Site contact</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `,
+                'deployments': `
+                    <div class="mb-4 bg-yellow-50 p-3 rounded">
+                        <div class="flex justify-between items-center">
+                            <h4 class="font-bold text-yellow-800">Table: deployments</h4>
+                            <div class="text-sm text-yellow-600">
+                                <span class="mr-4"><i class="fas fa-table mr-1"></i>Rows: ${rowCounts.deployments || 0}</span>
+                                <button onclick="showSQLModal('table_deployments')" class="bg-yellow-600 text-white px-3 py-1 rounded text-xs hover:bg-yellow-700">
+                                    <i class="fas fa-code mr-1"></i>View SQL
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-yellow-700 mt-1">Device-location assignments and deployment tracking</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto border border-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="border px-4 py-2">Column</th>
+                                    <th class="border px-4 py-2">Type</th>
+                                    <th class="border px-4 py-2">Constraints</th>
+                                    <th class="border px-4 py-2">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td class="border px-4 py-2 font-mono">deployment_id</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">PRIMARY KEY, AUTO_INCREMENT</td><td class="border px-4 py-2">Deployment ID</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">d_id</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">FOREIGN KEY, NOT NULL</td><td class="border px-4 py-2">Device reference</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">loc_id</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">FOREIGN KEY, NOT NULL</td><td class="border px-4 py-2">Location reference</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">deployment_date</td><td class="border px-4 py-2">DATE</td><td class="border px-4 py-2">NOT NULL</td><td class="border px-4 py-2">Date deployed</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">deployed_by</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">FOREIGN KEY</td><td class="border px-4 py-2">User who deployed</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">is_active</td><td class="border px-4 py-2">BOOLEAN</td><td class="border px-4 py-2">DEFAULT TRUE</td><td class="border px-4 py-2">Active deployment</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `,
+                'device_logs': `
+                    <div class="mb-4 bg-red-50 p-3 rounded">
+                        <div class="flex justify-between items-center">
+                            <h4 class="font-bold text-red-800">Table: device_logs</h4>
+                            <div class="text-sm text-red-600">
+                                <span class="mr-4"><i class="fas fa-table mr-1"></i>Rows: ${rowCounts.device_logs || 0}</span>
+                                <button onclick="showSQLModal('table_device_logs')" class="bg-red-600 text-white px-3 py-1 rounded text-xs hover:bg-red-700">
+                                    <i class="fas fa-code mr-1"></i>View SQL
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-red-700 mt-1">Device activity logs, errors, and resolution tracking</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto border border-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="border px-4 py-2">Column</th>
+                                    <th class="border px-4 py-2">Type</th>
+                                    <th class="border px-4 py-2">Constraints</th>
+                                    <th class="border px-4 py-2">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td class="border px-4 py-2 font-mono">log_id</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">PRIMARY KEY, AUTO_INCREMENT</td><td class="border px-4 py-2">Log entry ID</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">d_id</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">FOREIGN KEY, NOT NULL</td><td class="border px-4 py-2">Device reference</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">log_time</td><td class="border px-4 py-2">TIMESTAMP</td><td class="border px-4 py-2">DEFAULT CURRENT_TIMESTAMP</td><td class="border px-4 py-2">Log timestamp</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">log_type</td><td class="border px-4 py-2">ENUM</td><td class="border px-4 py-2">DEFAULT 'info'</td><td class="border px-4 py-2">info, warning, error, critical</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">message</td><td class="border px-4 py-2">TEXT</td><td class="border px-4 py-2">NOT NULL</td><td class="border px-4 py-2">Log message</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">resolved</td><td class="border px-4 py-2">BOOLEAN</td><td class="border px-4 py-2">DEFAULT FALSE</td><td class="border px-4 py-2">Issue resolved</td></tr>
+                                <tr><td class="border px-4 py-2 font-mono">resolved_by</td><td class="border px-4 py-2">INT</td><td class="border px-4 py-2">FOREIGN KEY</td><td class="border px-4 py-2">User who resolved</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                     <div class="mt-4">
-                        <h5 class="font-bold">Foreign Keys:</h5>
+                        <h5 class="font-bold">Key Features:</h5>
                         <ul class="text-sm text-gray-600 mt-2">
-                            <li>• <code>fk_device_type</code> - devices.type_id → device_types.type_id</li>
+                            <li>• High-volume logging with efficient indexing</li>
+                            <li>• Resolution tracking workflow</li>
+                            <li>• Severity-based categorization</li>
+                            <li>• Performance optimized for time-series queries</li>
                         </ul>
                     </div>
                 `
