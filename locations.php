@@ -235,7 +235,7 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
         <?php endif; ?>
         
         <!-- Statistics Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             <div class="bg-white rounded-lg shadow-md p-6 text-center">
                 <i class="fas fa-map-marked-alt text-blue-600 text-2xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['total_locations']; ?></p>
@@ -252,18 +252,6 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
                 <i class="fas fa-check-circle text-purple-600 text-2xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['active_locations']; ?></p>
                 <p class="text-sm text-gray-600">Active</p>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow-md p-6 text-center">
-                <i class="fas fa-compass text-orange-600 text-2xl mb-2"></i>
-                <p class="text-lg font-bold text-gray-800"><?php echo number_format($stats['avg_latitude'], 4); ?></p>
-                <p class="text-sm text-gray-600">Avg Latitude</p>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow-md p-6 text-center">
-                <i class="fas fa-compass text-red-600 text-2xl mb-2"></i>
-                <p class="text-lg font-bold text-gray-800"><?php echo number_format($stats['avg_longitude'], 4); ?></p>
-                <p class="text-sm text-gray-600">Avg Longitude</p>
             </div>
         </div>
         

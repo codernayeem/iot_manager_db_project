@@ -187,7 +187,7 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <!-- Stats Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
             <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="bg-white rounded-lg shadow-md p-4">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <i class="fas fa-microchip text-blue-600 text-2xl"></i>
@@ -205,7 +205,7 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             
             <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="bg-white rounded-lg shadow-md p-4">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <i class="fas fa-check-circle text-green-600 text-2xl"></i>
@@ -224,7 +224,7 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             
             <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="bg-white rounded-lg shadow-md p-4">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
@@ -243,13 +243,13 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             
             <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="bg-white rounded-lg shadow-md p-4">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <i class="fas fa-bug text-orange-600 text-2xl"></i>
                         </div>
                         <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Unresolved Issues</p>
+                            <p class="text-sm font-medium text-gray-600">Unresolved</p>
                             <p class="text-2xl font-bold text-gray-900"><?php echo $stats['unresolved_errors']; ?></p>
                         </div>
                     </div>
@@ -263,7 +263,7 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             
             <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="bg-white rounded-lg shadow-md p-4">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <i class="fas fa-map-marker-alt text-purple-600 text-2xl"></i>
@@ -281,7 +281,7 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             
             <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="bg-white rounded-lg shadow-md p-4">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
                             <i class="fas fa-users text-indigo-600 text-2xl"></i>
