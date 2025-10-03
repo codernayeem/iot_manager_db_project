@@ -1,6 +1,3 @@
-# Database Configuration (contains sensitive data)
-config/db_config.json
-
 # IDE and Editor files
 .vscode/
 .idea/
