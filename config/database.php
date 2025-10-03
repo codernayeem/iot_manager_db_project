@@ -6,7 +6,7 @@
 
 class Database {
     private $host = "localhost";
-    private $db_name = "iot_manager_db";
+    private $db_name = "iot_device_manager";
     private $username = "root";
     private $password = "";
     public $conn;
@@ -15,13 +15,21 @@ class Database {
         $this->conn = null;
         
         try {
-            // Basic SQL Connection
+            // Try to connect to the specific database first
             $this->conn = new PDO("mysql:host=" . $this->host . ";dbname=" . $this->db_name, 
                                 $this->username, $this->password);
             $this->conn->exec("set names utf8");
             $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         } catch(PDOException $exception) {
-            echo "Connection error: " . $exception->getMessage();
+            // If database doesn't exist, connect without database name
+            try {
+                $this->conn = new PDO("mysql:host=" . $this->host, 
+                                    $this->username, $this->password);
+                $this->conn->exec("set names utf8");
+                $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            } catch(PDOException $e) {
+                echo "Connection error: " . $e->getMessage();
+            }
         }
         
         return $this->conn;
@@ -38,6 +46,12 @@ class Database {
             
             $sql = "CREATE DATABASE IF NOT EXISTS " . $this->db_name . " CHARACTER SET utf8 COLLATE utf8_general_ci";
             $conn->exec($sql);
+            
+            // Update our connection to use the new database
+            $this->conn = new PDO("mysql:host=" . $this->host . ";dbname=" . $this->db_name, 
+                                $this->username, $this->password);
+            $this->conn->exec("set names utf8");
+            $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             
             return true;
         } catch(PDOException $e) {
@@ -155,10 +169,492 @@ class Database {
             $this->conn->exec($sql_deployments);
             $this->conn->exec($sql_device_logs);
 
+            // Create advanced SQL objects (views, procedures, functions, indexes)
+            $this->createAdvancedSQLObjects();
+
             return true;
         } catch(PDOException $e) {
             echo "Error creating tables: " . $e->getMessage();
             return false;
+        }
+    }
+    
+    /**
+     * Create advanced SQL objects (views, procedures, functions, indexes)
+     */
+    public function createAdvancedSQLObjects() {
+        try {
+            // Create Views
+            $this->createViews();
+            
+            // Create Stored Procedures
+            $this->createProcedures();
+            
+            // Create User-Defined Functions
+            $this->createFunctions();
+            
+            // Create Optimized Indexes
+            $this->createIndexes();
+            
+            return true;
+        } catch(PDOException $e) {
+            echo "Error creating advanced SQL objects: " . $e->getMessage();
+            return false;
+        }
+    }
+    
+    /**
+     * Create database views
+     */
+    private function createViews() {
+        // Device Summary View
+        $view_device_summary = "
+        CREATE OR REPLACE VIEW v_device_summary AS
+        SELECT 
+            d.d_id,
+            d.d_name,
+            dt.t_name as device_type,
+            l.loc_name as location,
+            d.status,
+            d.serial_number,
+            CONCAT(u.f_name, ' ', u.l_name) as owner_name,
+            COUNT(dl.log_id) as total_logs,
+            COUNT(CASE WHEN dl.log_type = 'error' THEN 1 END) as error_count,
+            COUNT(CASE WHEN dl.log_type = 'warning' THEN 1 END) as warning_count,
+            MAX(dl.log_time) as last_log_time,
+            DATEDIFF(NOW(), MAX(dl.log_time)) as days_since_last_log
+        FROM devices d
+        INNER JOIN device_types dt ON d.t_id = dt.t_id
+        INNER JOIN users u ON d.user_id = u.user_id
+        LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+        LEFT JOIN locations l ON dep.loc_id = l.loc_id
+        LEFT JOIN device_logs dl ON d.d_id = dl.d_id
+        GROUP BY d.d_id, d.d_name, dt.t_name, l.loc_name, d.status, d.serial_number, u.f_name, u.l_name
+        ";
+        
+        // Log Analysis View
+        $view_log_analysis = "
+        CREATE OR REPLACE VIEW v_log_analysis AS
+        SELECT 
+            DATE(dl.log_time) as log_date,
+            dl.log_type,
+            d.d_name,
+            dt.t_name as device_type,
+            l.loc_name,
+            COUNT(*) as log_count,
+            AVG(dl.severity_level) as avg_severity,
+            COUNT(CASE WHEN dl.resolved_by IS NULL THEN 1 END) as unresolved_count,
+            COUNT(CASE WHEN dl.resolved_by IS NOT NULL THEN 1 END) as resolved_count
+        FROM device_logs dl
+        INNER JOIN devices d ON dl.d_id = d.d_id
+        INNER JOIN device_types dt ON d.t_id = dt.t_id
+        LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+        LEFT JOIN locations l ON dep.loc_id = l.loc_id
+        WHERE dl.log_time >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+        GROUP BY DATE(dl.log_time), dl.log_type, d.d_name, dt.t_name, l.loc_name
+        ";
+        
+        // Resolver Performance View
+        $view_resolver_performance = "
+        CREATE OR REPLACE VIEW v_resolver_performance AS
+        SELECT 
+            u.user_id,
+            CONCAT(u.f_name, ' ', u.l_name) as resolver_name,
+            u.email,
+            COUNT(DISTINCT dl.log_id) as total_resolved,
+            COUNT(DISTINCT CASE WHEN dl.log_type = 'error' THEN dl.log_id END) as errors_resolved,
+            COUNT(DISTINCT CASE WHEN dl.log_type = 'warning' THEN dl.log_id END) as warnings_resolved,
+            AVG(TIMESTAMPDIFF(HOUR, dl.log_time, dl.resolved_at)) as avg_resolution_time_hours,
+            COUNT(DISTINCT dl.d_id) as devices_worked_on,
+            COUNT(DISTINCT dep.loc_id) as locations_covered
+        FROM users u
+        INNER JOIN device_logs dl ON u.user_id = dl.resolved_by
+        INNER JOIN devices d ON dl.d_id = d.d_id
+        LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+        WHERE dl.resolved_at IS NOT NULL
+        GROUP BY u.user_id, u.f_name, u.l_name, u.email
+        ";
+        
+        $this->conn->exec($view_device_summary);
+        $this->conn->exec($view_log_analysis);
+        $this->conn->exec($view_resolver_performance);
+    }
+    
+    /**
+     * Create stored procedures
+     */
+    private function createProcedures() {
+        // Drop existing procedures if they exist
+        $dropStatements = [
+            "DROP PROCEDURE IF EXISTS sp_device_health_check",
+            "DROP PROCEDURE IF EXISTS sp_cleanup_old_logs", 
+            "DROP PROCEDURE IF EXISTS sp_deploy_device",
+            "DROP PROCEDURE IF EXISTS sp_resolve_issue"
+        ];
+        
+        foreach ($dropStatements as $drop) {
+            try {
+                $this->conn->exec($drop);
+            } catch(PDOException $e) {
+                // Ignore errors if procedures don't exist
+            }
+        }
+        
+        // Device Health Check Procedure
+        $proc_health_check = "
+        CREATE PROCEDURE sp_device_health_check(
+            IN device_id INT,
+            IN days_back INT,
+            OUT health_score DECIMAL(5,2),
+            OUT status_message VARCHAR(255)
+        )
+        BEGIN
+            DECLARE error_count INT DEFAULT 0;
+            DECLARE warning_count INT DEFAULT 0;
+            DECLARE total_logs INT DEFAULT 0;
+            DECLARE last_log_date DATE;
+            
+            -- Set default value for days_back if null or 0
+            IF days_back IS NULL OR days_back <= 0 THEN
+                SET days_back = 30;
+            END IF;
+            
+            -- Get log statistics
+            SELECT 
+                COUNT(*),
+                COUNT(CASE WHEN log_type = 'error' THEN 1 END),
+                COUNT(CASE WHEN log_type = 'warning' THEN 1 END),
+                MAX(DATE(log_time))
+            INTO total_logs, error_count, warning_count, last_log_date
+            FROM device_logs 
+            WHERE d_id = device_id 
+            AND log_time >= DATE_SUB(NOW(), INTERVAL days_back DAY);
+            
+            -- Calculate health score
+            IF total_logs = 0 THEN
+                SET health_score = 0;
+                SET status_message = 'No data available';
+            ELSE
+                SET health_score = ((total_logs - error_count - (warning_count * 0.5)) / total_logs) * 100;
+                
+                IF health_score >= 90 THEN
+                    SET status_message = 'Excellent health';
+                ELSEIF health_score >= 70 THEN
+                    SET status_message = 'Good health';
+                ELSEIF health_score >= 50 THEN
+                    SET status_message = 'Fair health - needs attention';
+                ELSE
+                    SET status_message = 'Poor health - immediate action required';
+                END IF;
+            END IF;
+        END";
+        
+        try {
+            $this->conn->exec($proc_health_check);
+        } catch(PDOException $e) {
+            error_log("Failed to create sp_device_health_check: " . $e->getMessage());
+        }
+        
+        // Cleanup Old Logs Procedure
+        $proc_cleanup = "
+        CREATE PROCEDURE sp_cleanup_old_logs(
+            IN days_to_keep INT,
+            OUT deleted_count INT
+        )
+        BEGIN
+            DECLARE EXIT HANDLER FOR SQLEXCEPTION
+            BEGIN
+                ROLLBACK;
+                RESIGNAL;
+            END;
+            
+            -- Set default value if null or invalid
+            IF days_to_keep IS NULL OR days_to_keep <= 0 THEN
+                SET days_to_keep = 365;
+            END IF;
+            
+            START TRANSACTION;
+            
+            SELECT COUNT(*) INTO deleted_count 
+            FROM device_logs 
+            WHERE log_time < DATE_SUB(NOW(), INTERVAL days_to_keep DAY);
+            
+            DELETE FROM device_logs 
+            WHERE log_time < DATE_SUB(NOW(), INTERVAL days_to_keep DAY);
+            
+            COMMIT;
+        END
+        ";
+        
+        try {
+            $this->conn->exec($proc_cleanup);
+        } catch(PDOException $e) {
+            error_log("Failed to create sp_cleanup_old_logs: " . $e->getMessage());
+        }
+        
+        // Deploy Device Procedure
+        $proc_deploy = "
+        CREATE PROCEDURE sp_deploy_device(
+            IN device_id INT,
+            IN location_id INT,
+            IN deployed_by_user INT,
+            IN deployment_notes TEXT,
+            OUT success BOOLEAN,
+            OUT message VARCHAR(255)
+        )
+        BEGIN
+            DECLARE device_count INT DEFAULT 0;
+            DECLARE location_count INT DEFAULT 0;
+            DECLARE existing_deployment INT DEFAULT 0;
+            
+            DECLARE EXIT HANDLER FOR SQLEXCEPTION
+            BEGIN
+                ROLLBACK;
+                SET success = FALSE;
+                SET message = 'Deployment failed due to database error';
+            END;
+            
+            START TRANSACTION;
+            
+            -- Validate device exists
+            SELECT COUNT(*) INTO device_count FROM devices WHERE d_id = device_id;
+            IF device_count = 0 THEN
+                SET success = FALSE;
+                SET message = 'Device not found';
+                ROLLBACK;
+            ELSE
+                -- Validate location exists
+                SELECT COUNT(*) INTO location_count FROM locations WHERE loc_id = location_id;
+                IF location_count = 0 THEN
+                    SET success = FALSE;
+                    SET message = 'Location not found';
+                    ROLLBACK;
+                ELSE
+                    -- Check for existing active deployment
+                    SELECT COUNT(*) INTO existing_deployment 
+                    FROM deployments 
+                    WHERE d_id = device_id AND is_active = 1;
+                    
+                    IF existing_deployment > 0 THEN
+                        -- Deactivate existing deployment
+                        UPDATE deployments SET is_active = 0 WHERE d_id = device_id AND is_active = 1;
+                    END IF;
+                    
+                    -- Create new deployment
+                    INSERT INTO deployments (d_id, loc_id, deployed_by, deployment_notes, is_active)
+                    VALUES (device_id, location_id, deployed_by_user, deployment_notes, 1);
+                    
+                    -- Update device status
+                    UPDATE devices SET status = 'active' WHERE d_id = device_id;
+                    
+                    SET success = TRUE;
+                    SET message = 'Device deployed successfully';
+                    COMMIT;
+                END IF;
+            END IF;
+        END
+        ";
+        
+        // Resolve Issue Procedure
+        $proc_resolve = "
+        CREATE PROCEDURE sp_resolve_issue(
+            IN log_id INT,
+            IN resolver_user_id INT,
+            IN resolution_notes TEXT,
+            OUT success BOOLEAN,
+            OUT message VARCHAR(255)
+        )
+        BEGIN
+            DECLARE log_count INT DEFAULT 0;
+            DECLARE already_resolved INT DEFAULT 0;
+            
+            DECLARE EXIT HANDLER FOR SQLEXCEPTION
+            BEGIN
+                ROLLBACK;
+                SET success = FALSE;
+                SET message = 'Resolution failed due to database error';
+            END;
+            
+            START TRANSACTION;
+            
+            -- Check if log exists
+            SELECT COUNT(*) INTO log_count FROM device_logs WHERE log_id = log_id;
+            IF log_count = 0 THEN
+                SET success = FALSE;
+                SET message = 'Log entry not found';
+                ROLLBACK;
+            ELSE
+                -- Check if already resolved
+                SELECT COUNT(*) INTO already_resolved 
+                FROM device_logs 
+                WHERE log_id = log_id AND resolved_by IS NOT NULL;
+                
+                IF already_resolved > 0 THEN
+                    SET success = FALSE;
+                    SET message = 'Issue already resolved';
+                    ROLLBACK;
+                ELSE
+                    -- Mark as resolved
+                    UPDATE device_logs 
+                    SET resolved_by = resolver_user_id,
+                        resolved_at = NOW(),
+                        resolution_notes = resolution_notes
+                    WHERE log_id = log_id;
+                    
+                    SET success = TRUE;
+                    SET message = 'Issue resolved successfully';
+                    COMMIT;
+                END IF;
+            END IF;
+        END
+        ";
+        
+        try {
+            $this->conn->exec($proc_deploy);
+        } catch(PDOException $e) {
+            error_log("Failed to create sp_deploy_device: " . $e->getMessage());
+        }
+        
+        try {
+            $this->conn->exec($proc_resolve);
+        } catch(PDOException $e) {
+            error_log("Failed to create sp_resolve_issue: " . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Create user-defined functions
+     */
+    private function createFunctions() {
+        // Drop existing functions if they exist
+        $this->conn->exec("DROP FUNCTION IF EXISTS fn_calculate_uptime");
+        $this->conn->exec("DROP FUNCTION IF EXISTS fn_device_risk_score");
+        $this->conn->exec("DROP FUNCTION IF EXISTS fn_format_duration");
+        
+        // Calculate Uptime Function
+        $func_uptime = "
+        CREATE FUNCTION fn_calculate_uptime(device_id INT, days_back INT)
+        RETURNS DECIMAL(5,2)
+        READS SQL DATA
+        DETERMINISTIC
+        BEGIN
+            DECLARE total_hours DECIMAL(10,2);
+            DECLARE error_hours DECIMAL(10,2);
+            DECLARE uptime_percentage DECIMAL(5,2);
+            
+            SET total_hours = days_back * 24;
+            
+            SELECT COALESCE(SUM(
+                CASE 
+                    WHEN log_type = 'error' THEN 1.0
+                    ELSE 0.0 
+                END
+            ), 0) INTO error_hours
+            FROM device_logs 
+            WHERE d_id = device_id 
+            AND log_time >= DATE_SUB(NOW(), INTERVAL days_back DAY);
+            
+            SET uptime_percentage = GREATEST(0, ((total_hours - error_hours) / total_hours) * 100);
+            
+            RETURN uptime_percentage;
+        END
+        ";
+        
+        // Device Risk Score Function
+        $func_risk = "
+        CREATE FUNCTION fn_device_risk_score(device_id INT)
+        RETURNS INT
+        READS SQL DATA
+        DETERMINISTIC
+        BEGIN
+            DECLARE error_count INT DEFAULT 0;
+            DECLARE warning_count INT DEFAULT 0;
+            DECLARE days_since_maintenance INT DEFAULT 0;
+            DECLARE risk_score INT DEFAULT 0;
+            
+            -- Count recent errors and warnings
+            SELECT 
+                COUNT(CASE WHEN log_type = 'error' THEN 1 END),
+                COUNT(CASE WHEN log_type = 'warning' THEN 1 END)
+            INTO error_count, warning_count
+            FROM device_logs 
+            WHERE d_id = device_id 
+            AND log_time >= DATE_SUB(NOW(), INTERVAL 30 DAY);
+            
+            -- Check days since last maintenance
+            SELECT COALESCE(DATEDIFF(NOW(), last_maintenance), 365)
+            INTO days_since_maintenance
+            FROM devices 
+            WHERE d_id = device_id;
+            
+            -- Calculate risk score
+            SET risk_score = (error_count * 10) + (warning_count * 2) + 
+                           CASE 
+                               WHEN days_since_maintenance > 365 THEN 20
+                               WHEN days_since_maintenance > 180 THEN 10
+                               WHEN days_since_maintenance > 90 THEN 5
+                               ELSE 0
+                           END;
+            
+            RETURN LEAST(100, risk_score);
+        END
+        ";
+        
+        // Format Duration Function
+        $func_duration = "
+        CREATE FUNCTION fn_format_duration(hours DECIMAL(10,2))
+        RETURNS VARCHAR(50)
+        READS SQL DATA
+        DETERMINISTIC
+        BEGIN
+            DECLARE days INT;
+            DECLARE remaining_hours INT;
+            DECLARE result VARCHAR(50);
+            
+            IF hours IS NULL OR hours < 0 THEN
+                RETURN 'N/A';
+            END IF;
+            
+            SET days = FLOOR(hours / 24);
+            SET remaining_hours = hours % 24;
+            
+            IF days > 0 THEN
+                SET result = CONCAT(days, 'd ', remaining_hours, 'h');
+            ELSE
+                SET result = CONCAT(remaining_hours, 'h');
+            END IF;
+            
+            RETURN result;
+        END
+        ";
+        
+        $this->conn->exec($func_uptime);
+        $this->conn->exec($func_risk);
+        $this->conn->exec($func_duration);
+    }
+    
+    /**
+     * Create optimized indexes
+     */
+    private function createIndexes() {
+        // Performance indexes for common queries
+        $indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_device_logs_time_type ON device_logs(log_time, log_type)",
+            "CREATE INDEX IF NOT EXISTS idx_device_logs_device_time ON device_logs(d_id, log_time DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_device_logs_resolved ON device_logs(resolved_by, resolved_at)",
+            "CREATE INDEX IF NOT EXISTS idx_device_logs_severity ON device_logs(severity_level, log_type)",
+            "CREATE INDEX IF NOT EXISTS idx_deployments_active ON deployments(is_active, d_id, loc_id)",
+            "CREATE INDEX IF NOT EXISTS idx_devices_status_type ON devices(status, t_id)",
+            "CREATE INDEX IF NOT EXISTS idx_devices_maintenance ON devices(last_maintenance, status)",
+            "CREATE INDEX IF NOT EXISTS idx_device_logs_composite ON device_logs(d_id, log_type, log_time, resolved_by)"
+        ];
+        
+        foreach ($indexes as $index) {
+            try {
+                $this->conn->exec($index);
+            } catch(PDOException $e) {
+                // Index might already exist, continue
+            }
         }
     }
     
@@ -284,6 +780,147 @@ class Database {
             $this->conn->rollback();
             echo "Error inserting sample data: " . $e->getMessage();
             return false;
+        }
+    }
+    
+    /**
+     * Get comprehensive database status information
+     * SQL Features: SHOW TABLES, SHOW PROCEDURE STATUS, SHOW FUNCTION STATUS, 
+     * INFORMATION_SCHEMA queries, COUNT queries
+     */
+    public function getDatabaseStatus() {
+        $status = [
+            'connected' => false,
+            'database_exists' => false,
+            'tables' => [],
+            'views' => [],
+            'procedures' => [],
+            'functions' => [],
+            'table_info' => []
+        ];
+        
+        try {
+            // Ensure we have a connection
+            if ($this->conn === null) {
+                $this->getConnection();
+            }
+            
+            // Check connection
+            $status['connected'] = ($this->conn !== null);
+            
+            if (!$status['connected']) {
+                return $status;
+            }
+            
+            // Check if database exists
+            $stmt = $this->conn->prepare("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'iot_device_manager'");
+            $stmt->execute();
+            $status['database_exists'] = ($stmt->fetchColumn() !== false);
+            
+            if (!$status['database_exists']) {
+                return $status;
+            }
+            
+            // Now try to use the database
+            try {
+                $this->conn->exec("USE iot_device_manager");
+            } catch (PDOException $e) {
+                // If we can't use the database, it might not exist
+                $status['database_exists'] = false;
+                return $status;
+            }
+            
+            // Get tables
+            $stmt = $this->conn->prepare("SHOW TABLES");
+            $stmt->execute();
+            while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
+                $status['tables'][] = $row[0];
+            }
+            
+            // Get views
+            $stmt = $this->conn->prepare("SHOW FULL TABLES WHERE Table_type = 'VIEW'");
+            $stmt->execute();
+            while ($row = $stmt->fetch(PDO::FETCH_NUM)) {
+                $status['views'][] = $row[0];
+            }
+            
+            // Get procedures
+            $stmt = $this->conn->prepare("SHOW PROCEDURE STATUS WHERE Db = 'iot_device_manager'");
+            $stmt->execute();
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $status['procedures'][] = $row['Name'];
+            }
+            
+            // Get functions
+            $stmt = $this->conn->prepare("SHOW FUNCTION STATUS WHERE Db = 'iot_device_manager'");
+            $stmt->execute();
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $status['functions'][] = $row['Name'];
+            }
+            
+            // Get detailed table information
+            $tables = ['users', 'device_types', 'devices', 'locations', 'deployments', 'device_logs'];
+            foreach ($tables as $table) {
+                if (in_array($table, $status['tables'])) {
+                    $tableInfo = $this->getTableInfo($table);
+                    if ($tableInfo) {
+                        $status['table_info'][] = $tableInfo;
+                    }
+                }
+            }
+            
+        } catch (Exception $e) {
+            // Handle errors silently for status checking
+        }
+        
+        return $status;
+    }
+    
+    /**
+     * Get detailed information about a specific table
+     * SQL Features: INFORMATION_SCHEMA queries, COUNT, DESCRIBE
+     */
+    private function getTableInfo($tableName) {
+        try {
+            $info = ['name' => $tableName];
+            
+            // Get row count
+            $stmt = $this->conn->prepare("SELECT COUNT(*) FROM $tableName");
+            $stmt->execute();
+            $info['rows'] = $stmt->fetchColumn();
+            
+            // Get column count
+            $stmt = $this->conn->prepare("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'iot_device_manager' AND TABLE_NAME = ?");
+            $stmt->execute([$tableName]);
+            $info['columns'] = $stmt->fetchColumn();
+            
+            // Get table size
+            $stmt = $this->conn->prepare("
+                SELECT 
+                    ROUND(((data_length + index_length) / 1024 / 1024), 2) AS size_mb
+                FROM information_schema.tables 
+                WHERE table_schema = 'iot_device_manager' 
+                AND table_name = ?
+            ");
+            $stmt->execute([$tableName]);
+            $size = $stmt->fetchColumn();
+            $info['size'] = $size ? $size . ' MB' : '< 0.01 MB';
+            
+            // Get creation time
+            $stmt = $this->conn->prepare("
+                SELECT create_time 
+                FROM information_schema.tables 
+                WHERE table_schema = 'iot_device_manager' 
+                AND table_name = ?
+            ");
+            $stmt->execute([$tableName]);
+            $created = $stmt->fetchColumn();
+            $info['created'] = $created ? date('Y-m-d H:i', strtotime($created)) : 'Unknown';
+            
+            return $info;
+            
+        } catch (Exception $e) {
+            return null;
         }
     }
     

@@ -8,24 +8,54 @@ if (!isset($_SESSION['user_id'])) {
 require_once 'config/database.php';
 
 /**
- * SQL Features Used: Advanced Analytics with Window Functions, Complex Aggregations,
- * CTEs (Common Table Expressions), CASE statements, Date functions
+ * Merged Analytics Dashboard with Advanced Filtering
+ * SQL Features: Window Functions, CTEs, Complex Filtering, Subqueries, Aggregations
  */
 
 $database = new Database();
 $conn = $database->getConnection();
 
-// Date range for analytics (default: last 30 days)
-$dateRange = isset($_GET['range']) ? $_GET['range'] : '30';
-$customStart = isset($_GET['start_date']) ? $_GET['start_date'] : '';
-$customEnd = isset($_GET['end_date']) ? $_GET['end_date'] : '';
+// Get filter parameters
+$selectedDevice = isset($_GET['device']) ? (int)$_GET['device'] : null;
+$selectedCategory = isset($_GET['category']) ? (int)$_GET['category'] : null;
+$selectedLocation = isset($_GET['location']) ? (int)$_GET['location'] : null;
+$selectedUser = isset($_GET['user']) ? (int)$_GET['user'] : null;
+$dateRange = isset($_GET['date_range']) ? $_GET['date_range'] : '30';
+$logType = isset($_GET['log_type']) ? $_GET['log_type'] : '';
 
-// Build date condition
-if ($dateRange === 'custom' && !empty($customStart) && !empty($customEnd)) {
-    $dateCondition = "dl.log_time BETWEEN '$customStart 00:00:00' AND '$customEnd 23:59:59'";
-} else {
-    $dateCondition = "dl.log_time >= DATE_SUB(NOW(), INTERVAL $dateRange DAY)";
+// Build dynamic WHERE clause
+$whereConditions = [];
+$params = [];
+
+if ($selectedDevice) {
+    $whereConditions[] = "dl.d_id = ?";
+    $params[] = $selectedDevice;
 }
+
+if ($selectedCategory) {
+    $whereConditions[] = "dt.t_id = ?";
+    $params[] = $selectedCategory;
+}
+
+if ($selectedLocation) {
+    $whereConditions[] = "dep.loc_id = ?";
+    $params[] = $selectedLocation;
+}
+
+if ($selectedUser) {
+    $whereConditions[] = "dl.resolved_by = ?";
+    $params[] = $selectedUser;
+}
+
+if ($logType) {
+    $whereConditions[] = "dl.log_type = ?";
+    $params[] = $logType;
+}
+
+$whereClause = !empty($whereConditions) ? 'AND ' . implode(' AND ', $whereConditions) : '';
+
+// Build date condition based on date range
+$dateCondition = "dl.log_time >= DATE_SUB(NOW(), INTERVAL $dateRange DAY)";
 
 // SQL Feature: Window Functions with RANK and ROW_NUMBER
 $devicePerformanceQuery = "
