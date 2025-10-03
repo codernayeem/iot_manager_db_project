@@ -366,7 +366,7 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                             </a>
                         <?php endif; ?>
                         
-                        <a href="device_logs.php?device_id=<?php echo $device['d_id']; ?>" 
+                        <a href="device_logs.php?device=<?php echo $device['d_id']; ?>" 
                            class="flex-1 bg-purple-600 text-white text-center py-2 rounded hover:bg-purple-700 transition">
                             <i class="fas fa-list mr-1"></i>Logs
                         </a>

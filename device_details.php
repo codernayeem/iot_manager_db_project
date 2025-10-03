@@ -388,7 +388,7 @@ $healthBgClass = $healthScore >= 80 ? 'bg-green-100' : ($healthScore >= 60 ? 'bg
                     </button>
                 <?php endif; ?>
                 
-                <a href="device_logs.php?device_id=<?php echo $device['d_id']; ?>" 
+                <a href="device_logs.php?device=<?php echo $device['d_id']; ?>" 
                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">
                     <i class="fas fa-list mr-2"></i>View All Logs
                 </a>
@@ -738,7 +738,7 @@ $healthBgClass = $healthScore >= 80 ? 'bg-green-100' : ($healthScore >= 60 ? 'bg
                     </div>
                     
                     <div class="mt-6 text-center">
-                        <a href="device_logs.php?device_id=<?php echo $device['d_id']; ?>" 
+                        <a href="device_logs.php?device=<?php echo $device['d_id']; ?>" 
                            class="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition">
                             <i class="fas fa-external-link-alt mr-2"></i>View All Logs
                         </a>
@@ -1023,6 +1023,6 @@ $healthBgClass = $healthScore >= 80 ? 'bg-green-100' : ($healthScore >= 60 ? 'bg
         });
     </script>
     
-    <?php include 'components/sidebar_end.php'; ?>
+</div>
 </body>
 </html>

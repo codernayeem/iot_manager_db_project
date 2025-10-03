@@ -114,7 +114,10 @@ $logsQuery = "
         CASE 
             WHEN dl.log_type = 'error' AND dl.resolved_by IS NULL THEN 'critical'
             WHEN dl.log_type = 'error' AND dl.resolved_by IS NOT NULL THEN 'resolved'
-            WHEN dl.log_type = 'warning' THEN 'warning'
+            WHEN dl.log_type = 'warning' AND dl.resolved_by IS NULL THEN 'warning'
+            WHEN dl.log_type = 'warning' AND dl.resolved_by IS NOT NULL THEN 'resolved'
+            WHEN dl.log_type = 'info' THEN 'info'
+            WHEN dl.log_type = 'debug' THEN 'debug'
             ELSE 'normal'
         END as priority_status,
         TIMESTAMPDIFF(HOUR, dl.log_time, COALESCE(dl.resolved_at, NOW())) as hours_to_resolution,
@@ -242,6 +245,8 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
         .priority-critical { border-left: 4px solid #dc2626; background-color: #fef2f2; }
         .priority-warning { border-left: 4px solid #d97706; background-color: #fffbeb; }
         .priority-resolved { border-left: 4px solid #059669; background-color: #f0fdf4; }
+        .priority-info { border-left: 4px solid #3b82f6; background-color: #eff6ff; }
+        .priority-debug { border-left: 4px solid #8b5cf6; background-color: #f5f3ff; }
         .priority-normal { border-left: 4px solid #6b7280; background-color: #f9fafb; }
         
         .severity-1 { color: #059669; }
@@ -486,21 +491,28 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                         </div>
                         
                         <div class="ml-4 text-right">
-                            <?php if ($log['resolved_by']): ?>
-                                <div class="text-green-600 mb-2">
-                                    <i class="fas fa-check-circle mr-1"></i>
-                                    <strong>Resolved</strong>
-                                </div>
-                                <div class="text-sm text-gray-600">
-                                    by <?php echo htmlspecialchars($log['resolved_by_name']); ?>
-                                </div>
-                                <div class="text-xs text-gray-500">
-                                    <?php echo date('M j, H:i', strtotime($log['resolved_at'])); ?>
-                                </div>
+                            <?php if (in_array($log['log_type'], ['error', 'warning'])): ?>
+                                <?php if ($log['resolved_by']): ?>
+                                    <div class="text-green-600 mb-2">
+                                        <i class="fas fa-check-circle mr-1"></i>
+                                        <strong>Resolved</strong>
+                                    </div>
+                                    <div class="text-sm text-gray-600">
+                                        by <?php echo htmlspecialchars($log['resolved_by_name']); ?>
+                                    </div>
+                                    <div class="text-xs text-gray-500">
+                                        <?php echo date('M j, H:i', strtotime($log['resolved_at'])); ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="text-red-600 mb-2">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>
+                                        <strong>Unresolved</strong>
+                                    </div>
+                                <?php endif; ?>
                             <?php else: ?>
-                                <div class="text-red-600 mb-2">
-                                    <i class="fas fa-exclamation-circle mr-1"></i>
-                                    <strong>Unresolved</strong>
+                                <div class="text-gray-600 mb-2">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <strong><?php echo ucfirst($log['log_type']); ?></strong>
                                 </div>
                             <?php endif; ?>
                         </div>

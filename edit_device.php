@@ -493,6 +493,6 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
         });
     </script>
     
-    <?php include 'components/sidebar_end.php'; ?>
+</div>
 </body>
 </html>

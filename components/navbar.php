@@ -49,12 +49,6 @@
                 <span class="sidebar-text ml-3 font-medium">Analytics</span>
                 <div class="sidebar-tooltip">Analytics</div>
             </a>
-            
-            <a href="sql_features.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
-                <i class="fas fa-database text-lg w-6"></i>
-                <span class="sidebar-text ml-3 font-medium">SQL Features</span>
-                <div class="sidebar-tooltip">SQL Features</div>
-            </a>
         </nav>
     </div>
     
