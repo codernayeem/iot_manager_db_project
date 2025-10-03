@@ -1,7 +1,6 @@
 <?php
 require_once 'config/sql_features.php';
-$tracker = new SQLFeatureTracker();
-$allFeatures = $tracker->getAllFeatures();
+$allFeatures = SQLFeatureTracker::getFlattenedFeatures();
 ?>
 
 <!DOCTYPE html>
@@ -184,11 +183,15 @@ $allFeatures = $tracker->getAllFeatures();
                                         Implemented in:
                                     </h4>
                                     <div class="flex flex-wrap gap-1">
-                                        <?php foreach ($feature['files'] as $file): ?>
-                                            <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                                                <?php echo htmlspecialchars($file); ?>
-                                            </span>
-                                        <?php endforeach; ?>
+                                        <?php if (!empty($feature['files']) && is_array($feature['files'])): ?>
+                                            <?php foreach ($feature['files'] as $file): ?>
+                                                <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                                                    <?php echo htmlspecialchars($file); ?>
+                                                </span>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <span class="bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded">No files specified</span>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 

@@ -203,6 +203,38 @@ class SQLFeatureTracker {
         return self::$features;
     }
 
+    public static function getFlattenedFeatures() {
+        $flattened = [];
+        foreach (self::$features as $category => $features) {
+            foreach ($features as $featureName => $details) {
+                $flattened[] = [
+                    'name' => $featureName,
+                    'category' => $category,
+                    'description' => isset($details['description']) ? $details['description'] : 'No description available',
+                    'files' => isset($details['files']) ? $details['files'] : [],
+                    'complexity' => self::determineComplexity($category, $featureName),
+                    'example' => isset($details['example']) ? $details['example'] : null
+                ];
+            }
+        }
+        return $flattened;
+    }
+
+    private static function determineComplexity($category, $feature) {
+        // Basic operations
+        if (in_array($category, ['Basic Operations', 'Aggregation Functions', 'Sorting and Filtering'])) {
+            return 'Basic';
+        }
+        
+        // Advanced operations
+        if (in_array($category, ['Stored Procedures and Functions', 'Triggers and Automation', 'Indexing and Performance'])) {
+            return 'Advanced';
+        }
+        
+        // Everything else is intermediate
+        return 'Intermediate';
+    }
+
     public static function searchFeatures($keyword) {
         $results = [];
         foreach (self::$features as $category => $features) {

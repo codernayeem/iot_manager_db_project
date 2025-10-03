@@ -151,7 +151,20 @@ if (!empty($selectedCategory) && isset($features[$selectedCategory])) {
             <?php endif; ?>
         </div>
         
-        <!-- Statistics -->
+                        <!-- Statistics -->
+                <?php 
+                $totalFeatures = 0;
+                $totalFiles = [];
+                foreach (SQLFeatureTracker::getAllFeatures() as $category => $features) {
+                    $totalFeatures += count($features);
+                    foreach ($features as $feature => $details) {
+                        if (isset($details['files']) && is_array($details['files'])) {
+                            $totalFiles = array_merge($totalFiles, $details['files']);
+                        }
+                    }
+                }
+                $uniqueFiles = count(array_unique($totalFiles));
+                ?>
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div class="bg-white rounded-lg shadow-md p-6 text-center">
                 <i class="fas fa-layer-group text-3xl text-blue-600 mb-3"></i>
@@ -180,8 +193,10 @@ if (!empty($selectedCategory) && isset($features[$selectedCategory])) {
                     $totalFiles = [];
                     foreach (SQLFeatureTracker::getAllFeatures() as $category => $features) {
                         foreach ($features as $feature => $details) {
-                            foreach ($details['files'] as $file) {
-                                $totalFiles[$file] = true;
+                            if (isset($details['files']) && is_array($details['files'])) {
+                                foreach ($details['files'] as $file) {
+                                    $totalFiles[$file] = true;
+                                }
                             }
                         }
                     }
@@ -224,7 +239,7 @@ if (!empty($selectedCategory) && isset($features[$selectedCategory])) {
                                         <i class="fas fa-code mr-2 text-blue-600"></i>
                                         <?php echo htmlspecialchars($featureName); ?>
                                     </h3>
-                                    <p class="text-gray-600 mb-4"><?php echo htmlspecialchars($featureDetails['description']); ?></p>
+                                    <p class="text-gray-600 mb-4"><?php echo htmlspecialchars(isset($featureDetails['description']) ? $featureDetails['description'] : 'No description available'); ?></p>
                                 </div>
                                 
                                 <div class="mb-4">
@@ -232,11 +247,15 @@ if (!empty($selectedCategory) && isset($features[$selectedCategory])) {
                                         <i class="fas fa-file-code mr-2"></i>Implementation Files:
                                     </h4>
                                     <div class="flex flex-wrap gap-2">
-                                        <?php foreach ($featureDetails['files'] as $file): ?>
-                                            <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm font-mono">
-                                                <?php echo htmlspecialchars($file); ?>
-                                            </span>
-                                        <?php endforeach; ?>
+                                        <?php if (isset($featureDetails['files']) && is_array($featureDetails['files'])): ?>
+                                            <?php foreach ($featureDetails['files'] as $file): ?>
+                                                <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm font-mono">
+                                                    <?php echo htmlspecialchars($file); ?>
+                                                </span>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <span class="px-2 py-1 bg-gray-200 text-gray-500 rounded text-sm">No files specified</span>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 

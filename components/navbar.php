@@ -24,6 +24,9 @@
                 <a href="analytics.php" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium flex items-center">
                     <i class="fas fa-chart-bar mr-2"></i>Analytics
                 </a>
+                <a href="enhanced_analytics.php" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium flex items-center">
+                    <i class="fas fa-chart-line mr-2"></i>Enhanced Analytics
+                </a>
                 <a href="sql_features.php" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium flex items-center">
                     <i class="fas fa-database mr-2"></i>SQL Features
                 </a>
@@ -68,6 +71,9 @@
                 </a>
                 <a href="analytics.php" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
                     <i class="fas fa-chart-bar mr-2"></i>Analytics
+                </a>
+                <a href="enhanced_analytics.php" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
+                    <i class="fas fa-chart-line mr-2"></i>Enhanced Analytics
                 </a>
                 <a href="sql_features.php" class="text-gray-300 hover:text-white block px-3 py-2 rounded-md text-base font-medium">
                     <i class="fas fa-database mr-2"></i>SQL Features

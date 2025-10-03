@@ -7,6 +7,17 @@ require_once 'config/database.php';
  */
 
 $database = new Database();
+$message = '';
+$error = '';
+
+// Handle sample data insertion
+if (isset($_POST['insert_sample_data'])) {
+    if ($database->insertSampleData()) {
+        $message = "Comprehensive sample data inserted successfully! Including 30 days of log data.";
+    } else {
+        $error = "Failed to insert sample data.";
+    }
+}
 
 // Create database if not exists
 $database->createDatabase();
@@ -14,108 +25,20 @@ $database->createDatabase();
 // Create tables with all constraints
 $tablesCreated = $database->createTables();
 
-if ($tablesCreated) {
-    // Insert sample data if tables are empty
-    $conn = $database->getConnection();
-    
-    // Check if we need to insert sample data
-    $stmt = $conn->prepare("SELECT COUNT(*) FROM users");
-    $stmt->execute();
-    $userCount = $stmt->fetchColumn();
-    
-    if ($userCount == 0) {
-        insertSampleData($conn);
-    }
-}
+// Check current data status
+$conn = $database->getConnection();
+$stmt = $conn->prepare("SELECT COUNT(*) FROM users");
+$stmt->execute();
+$userCount = $stmt->fetchColumn();
 
-function insertSampleData($conn) {
-    try {
-        // SQL Feature: Transaction with COMMIT/ROLLBACK
-        $conn->beginTransaction();
-        
-        // Insert Users - SQL Feature: INSERT with multiple values
-        $sql = "INSERT INTO users (f_name, l_name, email, password) VALUES 
-                ('John', 'Doe', 'john.doe@email.com', ?),
-                ('Jane', 'Smith', 'jane.smith@email.com', ?),
-                ('Admin', 'User', 'admin@iot.com', ?),
-                ('Bob', 'Johnson', 'bob.johnson@email.com', ?),
-                ('Alice', 'Brown', 'alice.brown@email.com', ?)";
-        
-        $stmt = $conn->prepare($sql);
-        $hashedPassword = password_hash('password123', PASSWORD_DEFAULT);
-        $adminPassword = password_hash('admin123', PASSWORD_DEFAULT);
-        
-        $stmt->execute([$hashedPassword, $hashedPassword, $adminPassword, $hashedPassword, $hashedPassword]);
-        
-        // Insert Device Types
-        $sql = "INSERT INTO device_types (t_name, description, icon) VALUES 
-                ('Drone', 'Unmanned aerial vehicles for surveillance and monitoring', 'drone-icon.png'),
-                ('CCTV Camera', 'Closed-circuit television cameras for security monitoring', 'camera-icon.png'),
-                ('Raspberry Pi', 'Single-board computers for various IoT applications', 'raspberry-icon.png'),
-                ('Sensor Node', 'Environmental sensors for data collection', 'sensor-icon.png'),
-                ('Smart Lock', 'IoT-enabled door locks for security', 'lock-icon.png')";
-        
-        $conn->exec($sql);
-        
-        // Insert Locations
-        $sql = "INSERT INTO locations (loc_name, address, latitude, longitude) VALUES 
-                ('Main Office', '123 Tech Street, Silicon Valley, CA', 37.4419, -122.1430),
-                ('Warehouse A', '456 Storage Ave, Industrial District', 37.4219, -122.1630),
-                ('Branch Office', '789 Business Blvd, Downtown', 37.4619, -122.1230),
-                ('Data Center', '321 Server Road, Tech Park', 37.4319, -122.1530),
-                ('Remote Site', '654 Field Lane, Rural Area', 37.4519, -122.1330)";
-        
-        $conn->exec($sql);
-        
-        // Insert Devices - SQL Feature: INSERT with subqueries
-        $sql = "INSERT INTO devices (d_name, t_id, user_id, serial_number, status, purchase_date, warranty_expiry) VALUES 
-                ('Security Drone Alpha', 1, 1, 'DRN-001-2024', 'active', '2024-01-15', '2026-01-15'),
-                ('Perimeter Camera 01', 2, 2, 'CAM-001-2024', 'active', '2024-02-01', '2027-02-01'),
-                ('IoT Controller Pi', 3, 1, 'RPI-001-2024', 'maintenance', '2024-01-20', '2026-01-20'),
-                ('Temperature Sensor', 4, 3, 'SEN-001-2024', 'active', '2024-03-01', '2026-03-01'),
-                ('Main Entrance Lock', 5, 2, 'LCK-001-2024', 'active', '2024-01-10', '2026-01-10'),
-                ('Patrol Drone Beta', 1, 4, 'DRN-002-2024', 'inactive', '2024-02-15', '2026-02-15'),
-                ('Backup Camera 02', 2, 5, 'CAM-002-2024', 'error', '2024-01-25', '2027-01-25')";
-        
-        $conn->exec($sql);
-        
-        // Insert Deployments - SQL Feature: INSERT with foreign key references
-        $sql = "INSERT INTO deployments (d_id, loc_id, deployed_by, deployment_notes, is_active) VALUES 
-                (1, 1, 3, 'Deployed for main office security monitoring', 1),
-                (2, 1, 3, 'Monitoring main entrance', 1),
-                (3, 2, 1, 'Warehouse automation controller', 1),
-                (4, 3, 2, 'Branch office environmental monitoring', 1),
-                (5, 1, 3, 'Main office access control', 1),
-                (6, 4, 4, 'Data center surveillance', 0),
-                (7, 5, 5, 'Remote site backup monitoring', 1)";
-        
-        $conn->exec($sql);
-        
-        // Insert Device Logs - SQL Feature: INSERT with timestamp functions
-        $sql = "INSERT INTO device_logs (d_id, log_type, message, severity_level, resolved_by, resolved_at) VALUES 
-                (1, 'info', 'Device started successfully', 1, NULL, NULL),
-                (1, 'warning', 'Low battery detected - 15% remaining', 2, NULL, NULL),
-                (2, 'info', 'Camera recording started', 1, NULL, NULL),
-                (2, 'error', 'Network connection lost', 3, 3, NOW()),
-                (3, 'warning', 'High CPU temperature detected', 2, NULL, NULL),
-                (3, 'error', 'System overheating - automatic shutdown initiated', 4, 1, NOW()),
-                (4, 'info', 'Temperature reading: 23.5°C', 1, NULL, NULL),
-                (5, 'info', 'Access granted to user: john.doe', 1, NULL, NULL),
-                (6, 'error', 'Motor malfunction detected', 4, NULL, NULL),
-                (7, 'warning', 'Storage capacity 85% full', 2, 5, NOW())";
-        
-        $conn->exec($sql);
-        
-        // SQL Feature: COMMIT transaction
-        $conn->commit();
-        echo "Sample data inserted successfully!";
-        
-    } catch (Exception $e) {
-        // SQL Feature: ROLLBACK on error
-        $conn->rollback();
-        echo "Error inserting sample data: " . $e->getMessage();
-    }
-}
+$stmt = $conn->prepare("SELECT COUNT(*) FROM devices");
+$stmt->execute();
+$deviceCount = $stmt->fetchColumn();
+
+$stmt = $conn->prepare("SELECT COUNT(*) FROM device_logs");
+$stmt->execute();
+$logCount = $stmt->fetchColumn();
+
 ?>
 
 <!DOCTYPE html>
@@ -128,35 +51,109 @@ function insertSampleData($conn) {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
-    <div class="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
-        <div class="text-center">
+    <div class="bg-white p-8 rounded-lg shadow-md max-w-2xl w-full">
+        <div class="text-center mb-6">
             <i class="fas fa-database text-4xl text-blue-600 mb-4"></i>
-            <h1 class="text-2xl font-bold text-gray-800 mb-2">IoT Device Manager</h1>
-            <p class="text-gray-600 mb-6">Database Setup Complete</p>
-            
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">IoT Device Manager</h1>
+            <p class="text-gray-600">Database Setup & Sample Data Management</p>
+        </div>
+        
+        <!-- Messages -->
+        <?php if ($message): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                <p><i class="fas fa-check-circle mr-2"></i>Database and tables created successfully</p>
-                <p><i class="fas fa-data mr-2"></i>Sample data inserted</p>
+                <i class="fas fa-check-circle mr-2"></i><?php echo $message; ?>
+            </div>
+        <?php endif; ?>
+        
+        <?php if ($error): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                <i class="fas fa-exclamation-circle mr-2"></i><?php echo $error; ?>
+            </div>
+        <?php endif; ?>
+        
+        <!-- Database Status -->
+        <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-info-circle text-blue-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-blue-700">
+                        <strong>Database Status:</strong> Tables created successfully
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Current Data Statistics -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="bg-white border rounded-lg p-4 text-center">
+                <i class="fas fa-users text-blue-600 text-2xl mb-2"></i>
+                <p class="text-2xl font-bold text-gray-800"><?php echo $userCount; ?></p>
+                <p class="text-sm text-gray-600">Users</p>
             </div>
             
-            <div class="space-y-3">
-                <a href="login.php" class="block w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition">
-                    <i class="fas fa-sign-in-alt mr-2"></i>Login to System
-                </a>
-                
-                <a href="sql_features.php" class="block w-full bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700 transition">
-                    <i class="fas fa-code mr-2"></i>View SQL Features
-                </a>
-                
-                <a href="register.php" class="block w-full bg-gray-600 text-white py-2 px-4 rounded hover:bg-gray-700 transition">
-                    <i class="fas fa-user-plus mr-2"></i>Register New User
-                </a>
+            <div class="bg-white border rounded-lg p-4 text-center">
+                <i class="fas fa-microchip text-green-600 text-2xl mb-2"></i>
+                <p class="text-2xl font-bold text-gray-800"><?php echo $deviceCount; ?></p>
+                <p class="text-sm text-gray-600">Devices</p>
             </div>
             
-            <div class="mt-6 text-sm text-gray-500">
-                <p><strong>Default Login:</strong></p>
-                <p>Email: admin@iot.com</p>
-                <p>Password: admin123</p>
+            <div class="bg-white border rounded-lg p-4 text-center">
+                <i class="fas fa-list text-purple-600 text-2xl mb-2"></i>
+                <p class="text-2xl font-bold text-gray-800"><?php echo number_format($logCount); ?></p>
+                <p class="text-sm text-gray-600">Log Entries</p>
+            </div>
+        </div>
+        
+        <!-- Sample Data Section -->
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
+            <h3 class="text-lg font-bold text-yellow-800 mb-3">
+                <i class="fas fa-flask mr-2"></i>Comprehensive Demo Data
+            </h3>
+            <p class="text-sm text-yellow-700 mb-4">
+                Insert realistic sample data including:<br>
+                • <strong>18 diverse devices</strong> across 10 categories<br>
+                • <strong>6 locations</strong> with GPS coordinates<br>
+                • <strong>30 days of logs</strong> (3,000+ realistic entries)<br>
+                • <strong>5 technician users</strong> with resolution history<br>
+                • Complete deployment and maintenance records
+            </p>
+            
+            <form method="POST" class="inline">
+                <button type="submit" name="insert_sample_data" 
+                        class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 transition">
+                    <i class="fas fa-download mr-2"></i>Insert Comprehensive Data
+                </button>
+            </form>
+        </div>
+        
+        <!-- Navigation -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <a href="login.php" class="bg-blue-600 text-white py-3 px-4 rounded text-center hover:bg-blue-700 transition">
+                <i class="fas fa-sign-in-alt mr-2"></i>Login to System
+            </a>
+            
+            <a href="register.php" class="bg-gray-600 text-white py-3 px-4 rounded text-center hover:bg-gray-700 transition">
+                <i class="fas fa-user-plus mr-2"></i>Register New User
+            </a>
+            
+            <a href="sql_features.php" class="bg-green-600 text-white py-3 px-4 rounded text-center hover:bg-green-700 transition">
+                <i class="fas fa-code mr-2"></i>SQL Features Explorer
+            </a>
+            
+            <a href="features_overview.php" class="bg-purple-600 text-white py-3 px-4 rounded text-center hover:bg-purple-700 transition">
+                <i class="fas fa-chart-bar mr-2"></i>Features Overview
+            </a>
+        </div>
+        
+        <!-- Login Credentials -->
+        <div class="mt-6 bg-gray-50 rounded-lg p-4">
+            <h4 class="font-semibold text-gray-800 mb-2">Default Login Credentials:</h4>
+            <div class="text-sm text-gray-600 space-y-1">
+                <p><strong>Admin:</strong> admin@iotmanager.com / admin123</p>
+                <p><strong>Technician:</strong> john.smith@tech.com / password123</p>
+                <p class="text-xs text-gray-500 mt-2">More users available after inserting sample data</p>
             </div>
         </div>
     </div>
