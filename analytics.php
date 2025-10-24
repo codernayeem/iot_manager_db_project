@@ -249,6 +249,21 @@ foreach ($dailyData as $date => $data) {
             </div>
         </div>
         
+        <!-- SQL Feature Info -->
+        <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-database text-blue-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-blue-700">
+                        <strong>Advanced SQL Features:</strong> CTEs (WITH clause), Window Functions (ROW_NUMBER, LAG, AVG OVER), 
+                        PARTITION BY, Complex filtering, Subqueries, Growth rate calculations, Rolling averages, Dynamic date ranges
+                    </p>
+                </div>
+            </div>
+        </div>
+        
         <!-- Filters -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
             <h2 class="text-xl font-bold text-gray-800 mb-4">
@@ -357,8 +372,27 @@ foreach ($dailyData as $date => $data) {
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
             <!-- Log Trends Chart -->
             <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <h3 class="text-lg font-bold text-gray-800 mb-2">
                     <i class="fas fa-chart-line mr-2"></i>Log Trends Over Time
+                    <span class="sql-tooltip text-sm font-normal text-blue-600 underline cursor-help ml-2">
+                        (View CTE Query)
+                        <span class="tooltip-text">
+                            <strong>CTE with Window Functions:</strong><br><br>
+                            WITH daily_stats AS (<br>
+                            &nbsp;&nbsp;SELECT DATE(dl.log_time) as log_date, dl.log_type,<br>
+                            &nbsp;&nbsp;COUNT(*) as log_count, AVG(dl.severity_level) as avg_severity<br>
+                            &nbsp;&nbsp;FROM device_logs dl ... GROUP BY DATE(dl.log_time), dl.log_type<br>
+                            ),<br>
+                            ranked_daily AS (<br>
+                            &nbsp;&nbsp;SELECT *, ROW_NUMBER() OVER (PARTITION BY log_date ORDER BY log_count DESC),<br>
+                            &nbsp;&nbsp;LAG(log_count, 1) OVER (PARTITION BY d_name, log_type ORDER BY log_date),<br>
+                            &nbsp;&nbsp;AVG(log_count) OVER (... ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) as rolling_avg<br>
+                            &nbsp;&nbsp;FROM daily_stats<br>
+                            )<br>
+                            SELECT *, ((log_count - prev_day_count) * 100.0 / prev_day_count) as growth_rate<br>
+                            FROM ranked_daily
+                        </span>
+                    </span>
                 </h3>
                 <canvas id="trendsChart" width="400" height="200"></canvas>
             </div>
@@ -374,8 +408,24 @@ foreach ($dailyData as $date => $data) {
         
         <!-- Top Resolvers -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h3 class="text-lg font-bold text-gray-800 mb-4">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">
                 <i class="fas fa-user-cog mr-2"></i>Top Issue Resolvers
+                <span class="sql-tooltip text-sm font-normal text-blue-600 underline cursor-help ml-2">
+                    (View Query)
+                    <span class="tooltip-text">
+                        <strong>Resolver Performance Query:</strong><br><br>
+                        SELECT u.f_name, u.l_name, u.email,<br>
+                        COUNT(*) as total_resolved,<br>
+                        COUNT(CASE WHEN dl.log_type = 'error' THEN 1 END) as errors_resolved,<br>
+                        COUNT(CASE WHEN dl.log_type = 'warning' THEN 1 END) as warnings_resolved,<br>
+                        AVG(TIMESTAMPDIFF(HOUR, dl.log_time, dl.resolved_at)) as avg_resolution_time_hours,<br>
+                        COUNT(DISTINCT dl.d_id) as devices_worked_on,<br>
+                        ROUND(COUNT(CASE WHEN dl.log_type = 'error' THEN 1 END) * 100.0 / COUNT(*), 2) as error_resolution_rate,<br>
+                        ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC) as resolver_rank<br>
+                        FROM users u INNER JOIN device_logs dl ON u.user_id = dl.resolved_by<br>
+                        GROUP BY u.user_id ORDER BY total_resolved DESC
+                    </span>
+                </span>
             </h3>
             
             <?php if (!empty($resolvers)): ?>

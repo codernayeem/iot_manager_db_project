@@ -31,17 +31,18 @@ if ($_POST) {
     if ($action === 'update_device') {
         $name = trim($_POST['device_name']);
         $status = $_POST['status'];
-        $warrantyExpiry = $_POST['warranty_expiry'];
-        $lastMaintenance = $_POST['last_maintenance'];
         
         if (!empty($name)) {
             try {
                 $conn->beginTransaction();
                 
                 // Update device
-                $updateQuery = "UPDATE devices SET d_name = ?, status = ?, warranty_expiry = ?, last_maintenance = ? WHERE d_id = ?";
+                // TRIGGER: trg_device_updated_at will automatically fire BEFORE UPDATE to set updated_at = NOW()
+                $updateQuery = "UPDATE devices SET d_name = ?, status = ? WHERE d_id = ?";
                 $stmt = $conn->prepare($updateQuery);
-                $stmt->execute([$name, $status, $warrantyExpiry ?: null, $lastMaintenance ?: null, $deviceId]);
+                $stmt->execute([$name, $status, $deviceId]);
+                
+                // Note: Trigger 'trg_device_updated_at' has automatically updated the 'updated_at' timestamp
                 
                 // Log the update
                 $logQuery = "INSERT INTO device_logs (d_id, log_type, message, severity_level) VALUES (?, 'info', ?, 1)";
@@ -141,8 +142,6 @@ $deviceQuery = "
     SELECT 
         d.*,
         dt.t_name as device_type,
-        dt.description as type_description,
-        dt.icon as device_icon,
         CONCAT(u.f_name, ' ', u.l_name) as owner_name,
         u.email as owner_email,
         u.user_id as owner_id,
@@ -160,25 +159,7 @@ $deviceQuery = "
             DISTINCT CONCAT(l.loc_name, ' (', DATE_FORMAT(dep.deployed_at, '%Y-%m-%d'), ')') 
             ORDER BY dep.deployed_at DESC SEPARATOR '; '
         ) as deployment_history,
-        COUNT(DISTINCT CASE WHEN dep.is_active = 1 THEN dep.loc_id END) as active_deployments,
-        
-        -- Warranty and maintenance info
-        CASE 
-            WHEN d.warranty_expiry IS NULL THEN 'No warranty info'
-            WHEN d.warranty_expiry < CURDATE() THEN 'Expired'
-            WHEN DATEDIFF(d.warranty_expiry, CURDATE()) <= 30 THEN 'Expiring Soon'
-            ELSE 'Active'
-        END as warranty_status,
-        
-        CASE 
-            WHEN d.last_maintenance IS NULL THEN 'Never'
-            WHEN DATEDIFF(CURDATE(), d.last_maintenance) > 365 THEN 'Overdue'
-            WHEN DATEDIFF(CURDATE(), d.last_maintenance) > 180 THEN 'Due Soon'
-            ELSE 'Recent'
-        END as maintenance_status,
-        
-        DATEDIFF(CURDATE(), d.last_maintenance) as days_since_maintenance,
-        DATEDIFF(d.warranty_expiry, CURDATE()) as warranty_days_remaining
+        COUNT(DISTINCT CASE WHEN dep.is_active = 1 THEN dep.loc_id END) as active_deployments
         
     FROM devices d
     INNER JOIN device_types dt ON d.t_id = dt.t_id
@@ -186,8 +167,8 @@ $deviceQuery = "
     LEFT JOIN deployments dep ON d.d_id = dep.d_id
     LEFT JOIN locations l ON dep.loc_id = l.loc_id
     WHERE d.d_id = ?
-    GROUP BY d.d_id, d.d_name, d.serial_number, d.status, d.purchase_date, d.warranty_expiry, 
-             d.last_maintenance, d.created_at, d.updated_at, dt.t_name, dt.description, dt.icon,
+    GROUP BY d.d_id, d.d_name, d.serial_number, d.status, d.purchase_date, 
+             d.created_at, d.updated_at, dt.t_name,
              u.f_name, u.l_name, u.email, u.user_id
 ";
 
@@ -486,58 +467,6 @@ $healthBgClass = $healthScore >= 80 ? 'bg-green-100' : ($healthScore >= 60 ? 'bg
                     <div class="flex justify-between">
                         <span class="text-red-800">Unresolved:</span>
                         <span class="font-semibold text-red-800"><?php echo $device['unresolved_errors'] + $device['unresolved_warnings']; ?></span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Warranty Status -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4">Warranty</h3>
-                <div class="space-y-3">
-                    <div class="text-center">
-                        <div class="text-2xl font-bold <?php 
-                            echo $device['warranty_status'] === 'Active' ? 'text-green-600' : 
-                                ($device['warranty_status'] === 'Expiring Soon' ? 'text-yellow-600' : 'text-red-600'); 
-                        ?>">
-                            <?php echo $device['warranty_status']; ?>
-                        </div>
-                        <?php if ($device['warranty_expiry']): ?>
-                            <div class="text-gray-600 text-sm mt-2">
-                                Expires: <?php echo date('M j, Y', strtotime($device['warranty_expiry'])); ?>
-                            </div>
-                            <?php if ($device['warranty_days_remaining'] > 0): ?>
-                                <div class="text-gray-500 text-xs">
-                                    <?php echo $device['warranty_days_remaining']; ?> days remaining
-                                </div>
-                            <?php endif; ?>
-                        <?php else: ?>
-                            <div class="text-gray-500 text-sm">No warranty info</div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Maintenance Status -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4">Maintenance</h3>
-                <div class="space-y-3">
-                    <div class="text-center">
-                        <div class="text-2xl font-bold <?php 
-                            echo $device['maintenance_status'] === 'Recent' ? 'text-green-600' : 
-                                ($device['maintenance_status'] === 'Due Soon' ? 'text-yellow-600' : 'text-red-600'); 
-                        ?>">
-                            <?php echo $device['maintenance_status']; ?>
-                        </div>
-                        <?php if ($device['last_maintenance']): ?>
-                            <div class="text-gray-600 text-sm mt-2">
-                                Last: <?php echo date('M j, Y', strtotime($device['last_maintenance'])); ?>
-                            </div>
-                            <div class="text-gray-500 text-xs">
-                                <?php echo $device['days_since_maintenance']; ?> days ago
-                            </div>
-                        <?php else: ?>
-                            <div class="text-gray-500 text-sm">Never maintained</div>
-                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -922,24 +851,6 @@ $healthBgClass = $healthScore >= 80 ? 'bg-green-100' : ($healthScore >= 60 ? 'bg
                                     <option value="maintenance" <?php echo $device['status'] === 'maintenance' ? 'selected' : ''; ?>>Maintenance</option>
                                     <option value="error" <?php echo $device['status'] === 'error' ? 'selected' : ''; ?>>Error</option>
                                 </select>
-                            </div>
-                            
-                            <div>
-                                <label for="warranty_expiry" class="block text-sm font-medium text-gray-700 mb-2">
-                                    Warranty Expiry
-                                </label>
-                                <input type="date" id="warranty_expiry" name="warranty_expiry"
-                                       value="<?php echo $device['warranty_expiry']; ?>"
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
-                            </div>
-                            
-                            <div>
-                                <label for="last_maintenance" class="block text-sm font-medium text-gray-700 mb-2">
-                                    Last Maintenance
-                                </label>
-                                <input type="date" id="last_maintenance" name="last_maintenance"
-                                       value="<?php echo $device['last_maintenance']; ?>"
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
                             </div>
                         </div>
                         

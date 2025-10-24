@@ -59,8 +59,6 @@ if ($_POST) {
     $deviceType = (int)$_POST['device_type'];
     $status = $_POST['status'];
     $purchaseDate = $_POST['purchase_date'];
-    $warrantyExpiry = $_POST['warranty_expiry'];
-    $lastMaintenance = $_POST['last_maintenance'];
     
     if (!empty($deviceName) && $deviceType > 0) {
         try {
@@ -68,14 +66,14 @@ if ($_POST) {
             $conn->beginTransaction();
             
             // Update device with all fields
+            // TRIGGER: trg_device_updated_at will automatically fire BEFORE UPDATE to set updated_at = NOW()
+            // Note: We're also manually setting updated_at here, but the trigger ensures it's always updated
             $updateQuery = "
                 UPDATE devices 
                 SET d_name = ?, 
                     t_id = ?, 
                     status = ?, 
                     purchase_date = ?, 
-                    warranty_expiry = ?, 
-                    last_maintenance = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE d_id = ?
             ";
@@ -85,9 +83,7 @@ if ($_POST) {
                 $deviceName, 
                 $deviceType, 
                 $status, 
-                $purchaseDate ?: null, 
-                $warrantyExpiry ?: null, 
-                $lastMaintenance ?: null,
+                $purchaseDate ?: null,
                 $deviceId
             ]);
             
@@ -116,7 +112,7 @@ if ($_POST) {
 }
 
 // Get device types for dropdown
-$typesQuery = "SELECT t_id, t_name, description FROM device_types ORDER BY t_name";
+$typesQuery = "SELECT t_id, t_name FROM device_types ORDER BY t_name";
 $typesStmt = $conn->prepare($typesQuery);
 $typesStmt->execute();
 $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -214,7 +210,8 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
                     <p class="text-sm text-blue-700">
                         <strong>SQL Features:</strong> UPDATE with multiple fields, Transaction handling (BEGIN/COMMIT/ROLLBACK), 
                         INSERT for logging, SELECT with JOINs for validation, Foreign key constraints, 
-                        Conditional NULL handling, CURRENT_TIMESTAMP function
+                        Conditional NULL handling, CURRENT_TIMESTAMP function, 
+                        <span class="inline-block px-2 py-1 bg-orange-100 text-orange-800 rounded">1 Trigger (trg_device_updated_at - Auto-updates timestamp BEFORE UPDATE)</span>
                     </p>
                 </div>
             </div>
@@ -261,9 +258,6 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
                                 <option value="<?php echo $type['t_id']; ?>" 
                                         <?php echo $device['type_id'] == $type['t_id'] ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars($type['t_name']); ?>
-                                    <?php if ($type['description']): ?>
-                                        - <?php echo htmlspecialchars($type['description']); ?>
-                                    <?php endif; ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -323,23 +317,11 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
                             Warranty Expiry
                         </label>
                         <input type="date" 
-                               id="warranty_expiry" 
-                               name="warranty_expiry"
-                               value="<?php echo $device['warranty_expiry']; ?>"
+                               id="purchase_date" 
+                               name="purchase_date"
+                               value="<?php echo $device['purchase_date']; ?>"
                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">When the warranty expires</p>
-                    </div>
-                    
-                    <div>
-                        <label for="last_maintenance" class="block text-sm font-medium text-gray-700 mb-2">
-                            Last Maintenance
-                        </label>
-                        <input type="date" 
-                               id="last_maintenance" 
-                               name="last_maintenance"
-                               value="<?php echo $device['last_maintenance']; ?>"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">When the device was last maintained</p>
+                        <p class="text-xs text-gray-500 mt-1">When the device was purchased</p>
                     </div>
                 </div>
                 
@@ -468,29 +450,6 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
             if (existingWarning) {
                 existingWarning.remove();
             }
-            
-            if (this.value && diffDays < 30 && diffDays > 0) {
-                const warning = document.createElement('p');
-                warning.id = 'warranty-warning';
-                warning.className = 'text-xs text-yellow-600 mt-1';
-                warning.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Warranty expires in ' + diffDays + ' days';
-                this.parentNode.appendChild(warning);
-            } else if (this.value && diffDays <= 0) {
-                const warning = document.createElement('p');
-                warning.id = 'warranty-warning';
-                warning.className = 'text-xs text-red-600 mt-1';
-                warning.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Warranty has expired';
-                this.parentNode.appendChild(warning);
-            }
-        });
-        
-        // Trigger warranty check on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            const warrantyInput = document.getElementById('warranty_expiry');
-            if (warrantyInput.value) {
-                warrantyInput.dispatchEvent(new Event('change'));
-            }
-        });
     </script>
     
 </div>

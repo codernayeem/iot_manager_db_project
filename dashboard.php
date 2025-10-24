@@ -15,93 +15,145 @@ require_once 'config/database.php';
 $database = new Database();
 $conn = $database->getConnection();
 
-// SQL Feature: Complex query with multiple JOINs and subqueries
-$dashboardStats = "
-    SELECT 
-        (SELECT COUNT(*) FROM devices) as total_devices,
-        (SELECT COUNT(*) FROM devices WHERE status = 'active') as active_devices,
-        (SELECT COUNT(*) FROM devices WHERE status = 'error') as error_devices,
-        (SELECT COUNT(*) FROM device_logs WHERE log_type = 'error' AND resolved_by IS NULL) as unresolved_errors,
-        (SELECT COUNT(*) FROM locations) as total_locations,
-        (SELECT COUNT(DISTINCT user_id) FROM devices) as active_users
-";
+// Initialize default values
+$stats = [
+    'total_devices' => 0,
+    'active_devices' => 0,
+    'error_devices' => 0,
+    'unresolved_errors' => 0,
+    'total_locations' => 0,
+    'active_users' => 0
+];
+$deviceStatusCounts = [];
+$activeDevicesList = [];
+$deviceTypes = [];
+$recentLogs = [];
+$locations = [];
 
-$stmt = $conn->prepare($dashboardStats);
-$stmt->execute();
-$stats = $stmt->fetch(PDO::FETCH_ASSOC);
+// Check if tables exist before querying
+try {
+    $checkTable = $conn->query("SHOW TABLES LIKE 'devices'");
+    if ($checkTable->rowCount() > 0) {
+        // SQL Feature: Multiple SELECT subqueries with COUNT and WHERE
+        // Simple SQL: SELECT COUNT(*) with multiple subqueries
+        $dashboardStats = "
+            SELECT 
+                (SELECT COUNT(*) FROM devices) as total_devices,
+                (SELECT COUNT(*) FROM devices WHERE status = 'active') as active_devices,
+                (SELECT COUNT(*) FROM devices WHERE status = 'error') as error_devices,
+                (SELECT COUNT(*) FROM device_logs WHERE log_type = 'error' AND resolved_by IS NULL) as unresolved_errors,
+                (SELECT COUNT(*) FROM locations) as total_locations,
+                (SELECT COUNT(DISTINCT user_id) FROM devices) as active_users
+        ";
 
-// SQL Feature: LEFT JOIN with GROUP BY and aggregation functions
-$devicesByType = "
-    SELECT 
-        dt.t_name,
-        dt.icon,
-        COUNT(d.d_id) as device_count,
-        SUM(CASE WHEN d.status = 'active' THEN 1 ELSE 0 END) as active_count,
-        SUM(CASE WHEN d.status = 'error' THEN 1 ELSE 0 END) as error_count,
-        SUM(CASE WHEN d.status = 'maintenance' THEN 1 ELSE 0 END) as maintenance_count
-    FROM device_types dt
-    LEFT JOIN devices d ON dt.t_id = d.t_id
-    GROUP BY dt.t_id, dt.t_name, dt.icon
-    ORDER BY device_count DESC
-";
+        $stmt = $conn->prepare($dashboardStats);
+        $stmt->execute();
+        $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
-$stmt = $conn->prepare($devicesByType);
-$stmt->execute();
-$deviceTypes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // SQL Feature: Using stored procedure to count devices by status
+        // CALL sp_count_devices_by_status()
+        try {
+            $statusStmt = $conn->query("CALL sp_count_devices_by_status()");
+            $deviceStatusCounts = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
+            $statusStmt->closeCursor();
+        } catch (Exception $e) {
+            $deviceStatusCounts = [];
+        }
+    }
+} catch (PDOException $e) {
+    // Database not ready yet, use default values
+}
 
-// SQL Feature: Complex JOIN with date functions and conditional aggregation
-$recentActivity = "
-    SELECT 
-        dl.log_id,
-        d.d_name,
-        dt.t_name as device_type,
-        dl.log_type,
-        dl.message,
-        dl.log_time,
-        dl.severity_level,
-        CASE 
-            WHEN dl.resolved_by IS NOT NULL THEN CONCAT(u.f_name, ' ', u.l_name)
-            ELSE 'Unresolved'
-        END as resolver,
-        CASE 
-            WHEN dl.log_type = 'error' AND dl.resolved_by IS NULL THEN 'pending'
-            WHEN dl.log_type = 'error' AND dl.resolved_by IS NOT NULL THEN 'resolved'
-            ELSE 'normal'
-        END as status
-    FROM device_logs dl
-    INNER JOIN devices d ON dl.d_id = d.d_id
-    INNER JOIN device_types dt ON d.t_id = dt.t_id
-    LEFT JOIN users u ON dl.resolved_by = u.user_id
-    WHERE dl.log_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-    ORDER BY dl.log_time DESC, dl.severity_level DESC
-    LIMIT 10
-";
+// Only query if database is ready
+try {
+    $checkTable = $conn->query("SHOW TABLES LIKE 'devices'");
+    if ($checkTable->rowCount() > 0) {
+        // SQL Feature: LEFT JOIN with GROUP BY and aggregation functions (COUNT, SUM, CASE)
+        // JOIN: device_types LEFT JOIN devices, GROUP BY with aggregate functions
+        $devicesByType = "
+            SELECT 
+                dt.t_name,
+                COUNT(d.d_id) as device_count,
+                SUM(CASE WHEN d.status = 'active' THEN 1 ELSE 0 END) as active_count,
+                SUM(CASE WHEN d.status = 'error' THEN 1 ELSE 0 END) as error_count,
+                SUM(CASE WHEN d.status = 'maintenance' THEN 1 ELSE 0 END) as maintenance_count
+            FROM device_types dt
+            LEFT JOIN devices d ON dt.t_id = d.t_id
+            GROUP BY dt.t_id, dt.t_name
+            ORDER BY device_count DESC
+        ";
 
-$stmt = $conn->prepare($recentActivity);
-$stmt->execute();
-$recentLogs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $conn->prepare($devicesByType);
+        $stmt->execute();
+        $deviceTypes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// SQL Feature: Window functions for ranking (MySQL 8.0+)
-$topLocations = "
-    SELECT 
-        l.loc_name,
-        l.address,
-        COUNT(DISTINCT dep.d_id) as device_count,
-        COUNT(DISTINCT CASE WHEN d.status = 'active' THEN d.d_id END) as active_devices,
-        GROUP_CONCAT(DISTINCT dt.t_name ORDER BY dt.t_name SEPARATOR ', ') as device_types
-    FROM locations l
-    LEFT JOIN deployments dep ON l.loc_id = dep.loc_id AND dep.is_active = 1
-    LEFT JOIN devices d ON dep.d_id = d.d_id
-    LEFT JOIN device_types dt ON d.t_id = dt.t_id
-    GROUP BY l.loc_id, l.loc_name, l.address
-    HAVING device_count > 0
-    ORDER BY device_count DESC, active_devices DESC
-    LIMIT 5
-";
+        // SQL Feature: Using VIEW v_active_devices to get active devices
+        // VIEW usage: SELECT from view instead of complex JOIN
+        try {
+            $activeDevicesQuery = "SELECT * FROM v_active_devices LIMIT 5";
+            $activeDevicesStmt = $conn->query($activeDevicesQuery);
+            $activeDevicesList = $activeDevicesStmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            $activeDevicesList = [];
+        }
 
-$stmt = $conn->prepare($topLocations);
-$stmt->execute();
-$locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // SQL Feature: Complex JOIN with date functions and conditional aggregation
+        $recentActivity = "
+            SELECT 
+                dl.log_id,
+                d.d_name,
+                dt.t_name as device_type,
+                dl.log_type,
+                dl.message,
+                dl.log_time,
+                dl.severity_level,
+                CASE 
+                    WHEN dl.resolved_by IS NOT NULL THEN CONCAT(u.f_name, ' ', u.l_name)
+                    ELSE 'Unresolved'
+                END as resolver,
+                CASE 
+                    WHEN dl.log_type = 'error' AND dl.resolved_by IS NULL THEN 'pending'
+                    WHEN dl.log_type = 'error' AND dl.resolved_by IS NOT NULL THEN 'resolved'
+                    ELSE 'normal'
+                END as status
+            FROM device_logs dl
+            INNER JOIN devices d ON dl.d_id = d.d_id
+            INNER JOIN device_types dt ON d.t_id = dt.t_id
+            LEFT JOIN users u ON dl.resolved_by = u.user_id
+            WHERE dl.log_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            ORDER BY dl.log_time DESC, dl.severity_level DESC
+            LIMIT 10
+        ";
+
+        $stmt = $conn->prepare($recentActivity);
+        $stmt->execute();
+        $recentLogs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // SQL Feature: Using VIEW v_device_locations to get device locations
+        // VIEW usage: SELECT from view for simplified location query
+        try {
+            $topLocations = "
+                SELECT 
+                    loc_name,
+                    address,
+                    COUNT(*) as device_count
+                FROM v_device_locations
+                WHERE loc_name IS NOT NULL
+                GROUP BY loc_name, address
+                ORDER BY device_count DESC
+                LIMIT 5
+            ";
+            
+            $stmt = $conn->prepare($topLocations);
+            $stmt->execute();
+            $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            $locations = [];
+        }
+    }
+} catch (PDOException $e) {
+    // Database not ready yet, use default values
+}
 ?>
 
 <!DOCTYPE html>
@@ -178,7 +230,11 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </div>
                 <div class="ml-3">
                     <p class="text-sm text-blue-700">
-                        <strong>SQL Features on this page:</strong> Multiple JOINs (INNER, LEFT), Subqueries, GROUP BY, COUNT, SUM, CASE statements, Date functions, Window functions, GROUP_CONCAT
+                        <strong>SQL Features Used:</strong> 
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">2 Views</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">1 Stored Procedure (CURSOR, LOOP)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">2 Functions (IF/ELSE)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">JOINs, Subqueries, GROUP BY, CASE</span>
                     </p>
                 </div>
             </div>
@@ -300,6 +356,74 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
         </div>
         
+        <!-- Database Features Demo -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- Stored Procedure: sp_count_devices_by_status -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">
+                        <i class="fas fa-cogs mr-2"></i>Device Status Count
+                    </h2>
+                    <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">STORED PROCEDURE</span>
+                </div>
+                <div class="bg-gray-50 p-3 rounded mb-4">
+                    <code class="text-xs text-gray-700">
+                        <strong>CALL</strong> sp_count_devices_by_status()<br>
+                        <span class="text-gray-500">Features: CURSOR, LOOP, IF/ELSEIF, Variables</span>
+                    </code>
+                </div>
+                <div class="space-y-2">
+                    <?php if (!empty($deviceStatusCounts)): ?>
+                        <?php foreach ($deviceStatusCounts as $statusItem): ?>
+                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
+                                <div>
+                                    <span class="font-semibold text-gray-800"><?php echo ucfirst($statusItem['status']); ?></span>
+                                    <p class="text-xs text-gray-500"><?php echo $statusItem['status_label']; ?></p>
+                                </div>
+                                <span class="text-2xl font-bold text-blue-600"><?php echo $statusItem['device_count']; ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p class="text-gray-500 text-sm">No data available</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
+            <!-- View: v_active_devices -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">
+                        <i class="fas fa-eye mr-2"></i>Active Devices
+                    </h2>
+                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">VIEW</span>
+                </div>
+                <div class="bg-gray-50 p-3 rounded mb-4">
+                    <code class="text-xs text-gray-700">
+                        <strong>SELECT * FROM</strong> v_active_devices<br>
+                        <span class="text-gray-500">Features: INNER JOIN, WHERE</span>
+                    </code>
+                </div>
+                <div class="space-y-2">
+                    <?php if (!empty($activeDevicesList)): ?>
+                        <?php foreach ($activeDevicesList as $device): ?>
+                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
+                                <div class="flex-1">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-microchip text-green-600 mr-2"></i>
+                                        <span class="font-semibold text-gray-800"><?php echo htmlspecialchars($device['d_name']); ?></span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 ml-6"><?php echo htmlspecialchars($device['device_type']); ?> • <?php echo htmlspecialchars($device['owner_name']); ?></p>
+                                </div>
+                                <span class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded"><?php echo $device['status']; ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p class="text-gray-500 text-sm">No active devices</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <!-- Device Types Analysis -->
             <div class="bg-white rounded-lg shadow-md p-6">
@@ -309,13 +433,13 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     </h2>
                     <span class="tooltip-text">
                         SQL Query with LEFT JOIN and GROUP BY:<br><br>
-                        SELECT dt.t_name, dt.icon, COUNT(d.d_id) as device_count,<br>
+                        SELECT dt.t_name, COUNT(d.d_id) as device_count,<br>
                         SUM(CASE WHEN d.status = 'active' THEN 1 ELSE 0 END) as active_count,<br>
                         SUM(CASE WHEN d.status = 'error' THEN 1 ELSE 0 END) as error_count,<br>
                         SUM(CASE WHEN d.status = 'maintenance' THEN 1 ELSE 0 END) as maintenance_count<br>
                         FROM device_types dt<br>
                         LEFT JOIN devices d ON dt.t_id = d.t_id<br>
-                        GROUP BY dt.t_id, dt.t_name, dt.icon<br>
+                        GROUP BY dt.t_id, dt.t_name<br>
                         ORDER BY device_count DESC
                     </span>
                 </div>
@@ -344,45 +468,40 @@ $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 </div>
             </div>
             
-            <!-- Top Locations -->
+            <!-- Top Locations using VIEW -->
             <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="sql-tooltip inline-block">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">
                         <i class="fas fa-map-marker-alt mr-2"></i>Top Locations
                     </h2>
-                    <span class="tooltip-text">
-                        SQL Query with Multiple JOINs and GROUP_CONCAT:<br><br>
-                        SELECT l.loc_name, l.address,<br>
-                        COUNT(DISTINCT dep.d_id) as device_count,<br>
-                        COUNT(DISTINCT CASE WHEN d.status = 'active' THEN d.d_id END) as active_devices,<br>
-                        GROUP_CONCAT(DISTINCT dt.t_name ORDER BY dt.t_name SEPARATOR ', ') as device_types<br>
-                        FROM locations l<br>
-                        LEFT JOIN deployments dep ON l.loc_id = dep.loc_id AND dep.is_active = 1<br>
-                        LEFT JOIN devices d ON dep.d_id = d.d_id<br>
-                        LEFT JOIN device_types dt ON d.t_id = dt.t_id<br>
-                        GROUP BY l.loc_id, l.loc_name, l.address<br>
-                        HAVING device_count > 0<br>
-                        ORDER BY device_count DESC, active_devices DESC
-                    </span>
+                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">VIEW</span>
+                </div>
+                <div class="bg-gray-50 p-3 rounded mb-4">
+                    <code class="text-xs text-gray-700">
+                        <strong>SELECT</strong> loc_name, address, COUNT(*)<br>
+                        <strong>FROM</strong> v_device_locations<br>
+                        <strong>GROUP BY</strong> loc_name<br>
+                        <span class="text-gray-500">Features: VIEW with LEFT JOIN</span>
+                    </code>
                 </div>
                 
                 <div class="space-y-4">
-                    <?php foreach ($locations as $location): ?>
-                        <div class="p-4 bg-gray-50 rounded-lg">
-                            <div class="flex justify-between items-start mb-2">
-                                <h3 class="font-semibold text-gray-800"><?php echo htmlspecialchars($location['loc_name']); ?></h3>
-                                <div class="text-right">
-                                    <span class="text-lg font-bold text-blue-600"><?php echo $location['device_count']; ?></span>
-                                    <p class="text-xs text-gray-500">devices</p>
+                    <?php if (!empty($locations)): ?>
+                        <?php foreach ($locations as $location): ?>
+                            <div class="p-4 bg-gray-50 rounded-lg">
+                                <div class="flex justify-between items-start mb-2">
+                                    <h3 class="font-semibold text-gray-800"><?php echo htmlspecialchars($location['loc_name']); ?></h3>
+                                    <div class="text-right">
+                                        <span class="text-lg font-bold text-blue-600"><?php echo $location['device_count']; ?></span>
+                                        <p class="text-xs text-gray-500">devices</p>
+                                    </div>
                                 </div>
+                                <p class="text-sm text-gray-600 mb-2"><?php echo htmlspecialchars($location['address']); ?></p>
                             </div>
-                            <p class="text-sm text-gray-600 mb-2"><?php echo htmlspecialchars($location['address']); ?></p>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-green-600"><?php echo $location['active_devices']; ?> active</span>
-                                <span class="text-xs text-gray-500"><?php echo htmlspecialchars($location['device_types']); ?></span>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p class="text-gray-500 text-sm">No location data available</p>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

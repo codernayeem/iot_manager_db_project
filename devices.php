@@ -55,21 +55,22 @@ if ($locationFilter > 0) {
 
 $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereConditions) : "";
 
-// SQL Feature: Complex query with multiple JOINs, subqueries, and conditional WHERE
+// SQL Feature: Complex query with multiple JOINs, subqueries, and FUNCTION usage
+// Using FUNCTION: fn_device_status_text(status) to format status
 $devicesQuery = "
     SELECT 
         d.d_id,
         d.d_name,
         d.serial_number,
         d.status,
+        fn_device_status_text(d.status) as status_text,
         d.purchase_date,
-        d.warranty_expiry,
         d.created_at,
         d.updated_at,
         dt.t_name as device_type,
-        dt.icon as device_icon,
         CONCAT(u.f_name, ' ', u.l_name) as owner_name,
         u.email as owner_email,
+        fn_count_user_devices(u.user_id) as user_device_count,
         (SELECT COUNT(*) FROM device_logs dl WHERE dl.d_id = d.d_id AND dl.log_type = 'error' AND dl.resolved_by IS NULL) as unresolved_errors,
         (SELECT COUNT(*) FROM device_logs dl WHERE dl.d_id = d.d_id) as total_logs,
         (SELECT MAX(dl.log_time) FROM device_logs dl WHERE dl.d_id = d.d_id) as last_activity,
@@ -81,8 +82,8 @@ $devicesQuery = "
     LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
     LEFT JOIN locations l ON dep.loc_id = l.loc_id
     $whereClause
-    GROUP BY d.d_id, d.d_name, d.serial_number, d.status, d.purchase_date, d.warranty_expiry, 
-             d.created_at, d.updated_at, dt.t_name, dt.icon, u.f_name, u.l_name, u.email
+    GROUP BY d.d_id, d.d_name, d.serial_number, d.status, d.purchase_date, 
+             d.created_at, d.updated_at, dt.t_name, u.f_name, u.l_name, u.email, u.user_id
     ORDER BY $sortBy $sortOrder
     LIMIT $limit OFFSET $offset
 ";
@@ -201,7 +202,10 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                 </div>
                 <div class="ml-3">
                     <p class="text-sm text-blue-700">
-                        <strong>SQL Features:</strong> Complex JOINs (INNER, LEFT), Subqueries, GROUP BY, GROUP_CONCAT, LIMIT/OFFSET pagination, Dynamic WHERE clauses, LIKE operator, ORDER BY
+                        <strong>SQL Features Used:</strong> 
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">2 Functions (fn_device_status_text, fn_count_user_devices)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex JOINs (INNER, LEFT)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">GROUP BY, Subqueries, Pagination</span>
                     </p>
                 </div>
             </div>
@@ -325,15 +329,20 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
             <?php foreach ($devices as $device): ?>
                 <div class="device-card bg-white rounded-lg shadow-md p-6">
                     <div class="flex justify-between items-start mb-4">
-                        <div>
+                        <div class="flex-1">
                             <h3 class="text-lg font-bold text-gray-800 mb-1">
                                 <?php echo htmlspecialchars($device['d_name']); ?>
                             </h3>
                             <p class="text-sm text-gray-600"><?php echo htmlspecialchars($device['device_type']); ?></p>
                         </div>
-                        <span class="status-badge status-<?php echo $device['status']; ?>">
-                            <?php echo ucfirst($device['status']); ?>
-                        </span>
+                        <div class="text-right">
+                            <span class="status-badge status-<?php echo $device['status']; ?>">
+                                <?php echo ucfirst($device['status']); ?>
+                            </span>
+                            <p class="text-xs text-gray-500 mt-1">
+                                <i class="fas fa-database"></i> fn_device_status_text()
+                            </p>
+                        </div>
                     </div>
                     
                     <div class="space-y-2 mb-4">
@@ -345,6 +354,20 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                         <div class="flex justify-between text-sm">
                             <span class="text-gray-600">Owner:</span>
                             <span class="text-gray-800"><?php echo htmlspecialchars($device['owner_name']); ?></span>
+                        </div>
+                        
+                        <div class="flex justify-between text-sm bg-green-50 p-2 rounded">
+                            <span class="text-gray-600">
+                                <i class="fas fa-database text-green-600 mr-1"></i>User's Devices:
+                            </span>
+                            <span class="text-gray-800 font-semibold"><?php echo $device['user_device_count']; ?></span>
+                        </div>
+                        
+                        <div class="flex justify-between text-sm bg-blue-50 p-2 rounded">
+                            <span class="text-gray-600">
+                                <i class="fas fa-database text-blue-600 mr-1"></i>Status Text:
+                            </span>
+                            <span class="text-gray-800 text-xs"><?php echo htmlspecialchars($device['status_text']); ?></span>
                         </div>
                         
                         <?php if ($device['deployed_locations']): ?>

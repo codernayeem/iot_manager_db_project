@@ -290,22 +290,37 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
         
         <!-- Statistics Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-            <div class="bg-white rounded-lg shadow-md p-6 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-6 text-center cursor-help">
                 <i class="fas fa-map-marked-alt text-blue-600 text-2xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['total_locations']; ?></p>
                 <p class="text-sm text-gray-600">Total Locations</p>
+                <span class="tooltip-text">
+                    <strong>SQL Query:</strong><br><br>
+                    SELECT COUNT(*) as total_locations FROM locations
+                </span>
             </div>
             
-            <div class="bg-white rounded-lg shadow-md p-6 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-6 text-center cursor-help">
                 <i class="fas fa-satellite text-green-600 text-2xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['geocoded_locations']; ?></p>
                 <p class="text-sm text-gray-600">Geocoded</p>
+                <span class="tooltip-text">
+                    <strong>SQL Query:</strong><br><br>
+                    SELECT COUNT(CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL THEN 1 END)<br>
+                    as geocoded_locations FROM locations
+                </span>
             </div>
             
-            <div class="bg-white rounded-lg shadow-md p-6 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-6 text-center cursor-help">
                 <i class="fas fa-check-circle text-purple-600 text-2xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['active_locations']; ?></p>
                 <p class="text-sm text-gray-600">Active</p>
+                <span class="tooltip-text">
+                    <strong>SQL Query:</strong><br><br>
+                    SELECT COUNT(CASE WHEN EXISTS(<br>
+                    &nbsp;&nbsp;SELECT 1 FROM deployments WHERE loc_id = locations.loc_id AND is_active = 1<br>
+                    ) THEN 1 END) as active_locations FROM locations
+                </span>
             </div>
         </div>
         
@@ -374,6 +389,31 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
         </div>
         
         <!-- Locations Grid -->
+        <div class="mb-4">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-list mr-2"></i>All Locations
+                <span class="sql-tooltip text-sm font-normal text-blue-600 underline cursor-help ml-2">
+                    (View SQL)
+                    <span class="tooltip-text">
+                        <strong>Main Query with Multiple Aggregations:</strong><br><br>
+                        SELECT l.*, COUNT(DISTINCT dep.d_id) as total_devices,<br>
+                        COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) as active_devices,<br>
+                        COUNT(DISTINCT dt.t_id) as device_type_count,<br>
+                        GROUP_CONCAT(DISTINCT dt.t_name ORDER BY dt.t_name SEPARATOR ', ') as device_types,<br>
+                        COUNT(DISTINCT dl.log_id) as total_logs,<br>
+                        AVG(CASE WHEN dl.log_type = 'error' THEN dl.severity_level END) as avg_error_severity,<br>
+                        ROUND(COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) * 100.0 /<br>
+                        &nbsp;&nbsp;NULLIF(COUNT(DISTINCT dep.d_id), 0), 2) as uptime_percentage<br>
+                        FROM locations l<br>
+                        LEFT JOIN deployments dep ON l.loc_id = dep.loc_id AND dep.is_active = 1<br>
+                        LEFT JOIN devices d ON dep.d_id = d.d_id<br>
+                        LEFT JOIN device_types dt ON d.t_id = dt.t_id<br>
+                        LEFT JOIN device_logs dl ON d.d_id = dl.d_id AND dl.log_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)<br>
+                        GROUP BY l.loc_id ORDER BY total_devices DESC
+                    </span>
+                </span>
+            </h2>
+        </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <?php foreach ($locations as $location): ?>
                 <div class="location-card health-<?php echo strtolower($location['location_health']); ?> bg-white rounded-lg shadow-md p-6">

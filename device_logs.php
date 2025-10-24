@@ -110,7 +110,6 @@ $logsQuery = "
         d.serial_number,
         d.status as device_status,
         dt.t_name as device_type,
-        dt.icon as device_icon,
         CONCAT(u.f_name, ' ', u.l_name) as device_owner,
         CASE 
             WHEN dl.resolved_by IS NOT NULL THEN CONCAT(ru.f_name, ' ', ru.l_name)
@@ -138,7 +137,7 @@ $logsQuery = "
     $whereClause
     GROUP BY dl.log_id, dl.d_id, dl.log_time, dl.log_type, dl.message, dl.severity_level,
              dl.resolved_by, dl.resolved_at, dl.resolution_notes, d.d_name, d.serial_number,
-             d.status, dt.t_name, dt.icon, u.f_name, u.l_name, ru.f_name, ru.l_name
+             d.status, dt.t_name, u.f_name, u.l_name, ru.f_name, ru.l_name
     ORDER BY 
         CASE WHEN dl.resolved_by IS NULL THEN 0 ELSE 1 END,
         dl.severity_level DESC,
@@ -299,46 +298,67 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
         
         <!-- Statistics Cards -->
         <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
-            <div class="bg-white rounded-lg shadow-md p-4 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-4 text-center cursor-help">
                 <i class="fas fa-list text-blue-600 text-xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo number_format($stats['total_logs']); ?></p>
                 <p class="text-sm text-gray-600">Total Logs</p>
+                <span class="tooltip-text">
+                    <strong>SQL:</strong> SELECT COUNT(*) FROM device_logs
+                </span>
             </div>
             
-            <div class="bg-white rounded-lg shadow-md p-4 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-4 text-center cursor-help">
                 <i class="fas fa-exclamation-triangle text-red-600 text-xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['error_logs']; ?></p>
                 <p class="text-sm text-gray-600">Errors</p>
+                <span class="tooltip-text">
+                    <strong>SQL:</strong> SELECT COUNT(*) FROM device_logs<br>WHERE log_type = 'error'
+                </span>
             </div>
             
-            <div class="bg-white rounded-lg shadow-md p-4 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-4 text-center cursor-help">
                 <i class="fas fa-exclamation-circle text-yellow-600 text-xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['warning_logs']; ?></p>
                 <p class="text-sm text-gray-600">Warnings</p>
+                <span class="tooltip-text">
+                    <strong>SQL:</strong> SELECT COUNT(*) FROM device_logs<br>WHERE log_type = 'warning'
+                </span>
             </div>
             
-            <div class="bg-white rounded-lg shadow-md p-4 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-4 text-center cursor-help">
                 <i class="fas fa-info-circle text-green-600 text-xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['info_logs']; ?></p>
                 <p class="text-sm text-gray-600">Info</p>
+                <span class="tooltip-text">
+                    <strong>SQL:</strong> SELECT COUNT(*) FROM device_logs<br>WHERE log_type = 'info'
+                </span>
             </div>
             
-            <div class="bg-white rounded-lg shadow-md p-4 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-4 text-center cursor-help">
                 <i class="fas fa-bug text-orange-600 text-xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['unresolved_issues']; ?></p>
                 <p class="text-sm text-gray-600">Unresolved</p>
+                <span class="tooltip-text">
+                    <strong>SQL:</strong> SELECT COUNT(*) FROM device_logs<br>WHERE resolved_by IS NULL
+                </span>
             </div>
             
-            <div class="bg-white rounded-lg shadow-md p-4 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-4 text-center cursor-help">
                 <i class="fas fa-tachometer-alt text-purple-600 text-xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo number_format($stats['avg_severity'], 1); ?></p>
                 <p class="text-sm text-gray-600">Avg Severity</p>
+                <span class="tooltip-text">
+                    <strong>SQL:</strong> SELECT AVG(severity_level) FROM device_logs
+                </span>
             </div>
             
-            <div class="bg-white rounded-lg shadow-md p-4 text-center">
+            <div class="sql-tooltip bg-white rounded-lg shadow-md p-4 text-center cursor-help">
                 <i class="fas fa-microchip text-indigo-600 text-xl mb-2"></i>
                 <p class="text-2xl font-bold text-gray-800"><?php echo $stats['affected_devices']; ?></p>
                 <p class="text-sm text-gray-600">Devices</p>
+                <span class="tooltip-text">
+                    <strong>SQL:</strong> SELECT COUNT(DISTINCT d_id) FROM device_logs
+                </span>
             </div>
         </div>
         
@@ -452,6 +472,24 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                 <?php if (!empty($search) || $deviceFilter || $locationFilter || !empty($typeFilter) || !empty($statusFilter) || !empty($dateFrom) || !empty($dateTo)): ?>
                     (filtered)
                 <?php endif; ?>
+            </div>
+            <div class="sql-tooltip text-sm text-blue-600 underline cursor-help">
+                View Main Query SQL
+                <span class="tooltip-text">
+                    <strong>Complex Multi-JOIN Query with Aggregations:</strong><br><br>
+                    SELECT dl.*, d.d_name, dt.t_name as device_type,<br>
+                    u.f_name, u.l_name, l.loc_name,<br>
+                    TIMESTAMPDIFF(HOUR, dl.log_time, NOW()) as hours_ago,<br>
+                    CASE WHEN dl.resolved_by IS NULL THEN 'Unresolved' ELSE 'Resolved' END as status<br>
+                    FROM device_logs dl<br>
+                    INNER JOIN devices d ON dl.d_id = d.d_id<br>
+                    INNER JOIN device_types dt ON d.t_id = dt.t_id<br>
+                    LEFT JOIN users u ON dl.resolved_by = u.user_id<br>
+                    LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1<br>
+                    LEFT JOIN locations l ON dep.loc_id = l.loc_id<br>
+                    WHERE [dynamic conditions]<br>
+                    ORDER BY dl.log_time DESC LIMIT 20
+                </span>
             </div>
         </div>
         

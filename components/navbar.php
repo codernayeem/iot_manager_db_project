@@ -12,42 +12,60 @@
     </div>
     
     <!-- Navigation Menu -->
-    <div class="sidebar-menu flex-1 py-4">
-        <nav class="space-y-2 px-3">
+    <div class="sidebar-menu flex-1 py-4 overflow-y-auto">
+        <nav class="space-y-1 px-3">
             <a href="index.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
-                <i class="fas fa-home text-lg w-6"></i>
-                <span class="sidebar-text ml-3 font-medium">Home</span>
+                <i class="fas fa-database text-lg w-6"></i>
+                <span class="sidebar-text ml-3 font-medium">Database Setup</span>
                 <div class="sidebar-tooltip">Database Setup</div>
             </a>
             
             <a href="dashboard.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
                 <i class="fas fa-tachometer-alt text-lg w-6"></i>
-                <span class="sidebar-text ml-3 font-medium">Dashboard</span>
-                <div class="sidebar-tooltip">Dashboard</div>
+                <span class="sidebar-text ml-3 font-medium">Overview</span>
+                <div class="sidebar-tooltip">Dashboard Overview</div>
+            </a>            
+            <a href="users.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
+                <i class="fas fa-users text-lg w-6"></i>
+                <span class="sidebar-text ml-3 font-medium">All Users</span>
+                <div class="sidebar-tooltip">User Management</div>
+            </a>
+            
+            <a href="device_types.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
+                <i class="fas fa-tags text-lg w-6"></i>
+                <span class="sidebar-text ml-3 font-medium">Device Types</span>
+                <div class="sidebar-tooltip">Device Categories</div>
             </a>
             
             <a href="devices.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
                 <i class="fas fa-microchip text-lg w-6"></i>
-                <span class="sidebar-text ml-3 font-medium">Devices</span>
-                <div class="sidebar-tooltip">Devices</div>
-            </a>
-            
-            <a href="device_logs.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
-                <i class="fas fa-list-alt text-lg w-6"></i>
-                <span class="sidebar-text ml-3 font-medium">Logs</span>
-                <div class="sidebar-tooltip">Device Logs</div>
+                <span class="sidebar-text ml-3 font-medium">All Devices</span>
+                <div class="sidebar-tooltip">Manage Devices</div>
             </a>
             
             <a href="locations.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
                 <i class="fas fa-map-marker-alt text-lg w-6"></i>
-                <span class="sidebar-text ml-3 font-medium">Locations</span>
-                <div class="sidebar-tooltip">Locations</div>
+                <span class="sidebar-text ml-3 font-medium">All Locations</span>
+                <div class="sidebar-tooltip">Manage Locations</div>
+            </a>
+            
+            
+            <a href="map.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
+                <i class="fas fa-map-marked-alt text-lg w-6"></i>
+                <span class="sidebar-text ml-3 font-medium">Map View</span>
+                <div class="sidebar-tooltip">Location Map</div>
+            </a>
+            
+            <a href="device_logs.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
+                <i class="fas fa-list-alt text-lg w-6"></i>
+                <span class="sidebar-text ml-3 font-medium">Device Logs</span>
+                <div class="sidebar-tooltip">Activity Logs</div>
             </a>
             
             <a href="analytics.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
                 <i class="fas fa-chart-line text-lg w-6"></i>
                 <span class="sidebar-text ml-3 font-medium">Analytics</span>
-                <div class="sidebar-tooltip">Analytics</div>
+                <div class="sidebar-tooltip">Analytics & Reports</div>
             </a>
         </nav>
     </div>

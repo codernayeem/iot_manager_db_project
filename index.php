@@ -31,7 +31,7 @@ $currentConfig = $database->getConfig();
     <title>IoT Device Manager - Database Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="js/database-manager.js" defer></script>
+    <script src="js/database-manager.js?v=<?php echo time(); ?>" defer></script>
     <style>
         .status-good { color: #10b981; }
         .status-missing { color: #ef4444; }
@@ -146,9 +146,9 @@ $currentConfig = $database->getConfig();
                 
                 <!-- Views Status -->
                 <div class="bg-gray-50 rounded p-3 text-sm">
-                    <h3 class="font-semibold text-gray-700 mb-2">Views <span id="views-status" class="view-count">(0/3)</span></h3>
+                    <h3 class="font-semibold text-gray-700 mb-2">Views <span id="views-status" class="view-count">(0/2)</span></h3>
                     <div class="space-y-1 text-xs">
-                        <?php foreach (['v_device_summary', 'v_log_analysis', 'v_resolver_performance'] as $view): ?>
+                        <?php foreach (['v_active_devices', 'v_device_locations'] as $view): ?>
                             <div class="flex justify-between">
                                 <span data-sql-type="view" 
                                       data-sql-name="<?php echo $view; ?>"
@@ -166,9 +166,9 @@ $currentConfig = $database->getConfig();
                     </div>
                 </div>
                 
-                <!-- Procedures & Functions -->
+                <!-- Procedures & Functions & Triggers -->
                 <div class="bg-gray-50 rounded p-3 text-sm">
-                    <h3 class="font-semibold text-gray-700 mb-2">Procedures & Functions</h3>
+                    <h3 class="font-semibold text-gray-700 mb-2">Procedures, Functions & Triggers</h3>
                     <div class="space-y-1 text-xs">
                         <div class="flex justify-between">
                             <span data-sql-type="procedures" 
@@ -178,7 +178,7 @@ $currentConfig = $database->getConfig();
                             </span>
                             <span id="procedure-count" class="procedure-count status-missing"
                                   title="CREATE PROCEDURE sp_...">
-                                0/4
+                                0/2
                             </span>
                         </div>
                         <div class="flex justify-between">
@@ -189,7 +189,18 @@ $currentConfig = $database->getConfig();
                             </span>
                             <span id="function-count" class="function-count status-missing"
                                   title="CREATE FUNCTION fn_...">
-                                0/3
+                                0/2
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span data-sql-type="triggers" 
+                                  class="cursor-pointer underline"
+                                  title="Click to see SQL">
+                                Triggers:
+                            </span>
+                            <span id="trigger-count" class="trigger-count status-missing"
+                                  title="CREATE TRIGGER trg_...">
+                                0/2
                             </span>
                         </div>
                     </div>

@@ -8,8 +8,6 @@ CREATE TABLE IF NOT EXISTS devices (
     serial_number VARCHAR(100) UNIQUE NOT NULL,
     status ENUM('active', 'inactive', 'maintenance', 'error') DEFAULT 'inactive',
     purchase_date DATE,
-    warranty_expiry DATE,
-    last_maintenance DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (t_id) REFERENCES device_types(t_id) ON DELETE RESTRICT ON UPDATE CASCADE,

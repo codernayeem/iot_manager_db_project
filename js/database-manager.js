@@ -309,15 +309,16 @@ class DatabaseManager {
         const viewsElement = document.getElementById('views-status');
         if (viewsElement) {
             const viewCount = status.views ? status.views.length : 0;
-            viewsElement.textContent = `(${viewCount}/3)`;
+            viewsElement.textContent = `(${viewCount}/2)`;
             viewsElement.className = viewCount > 0 ? 'status-good' : 'status-missing';
         }
 
         // Update views status
-        ['v_device_summary', 'v_log_analysis', 'v_resolver_performance'].forEach(view => {
+        ['v_active_devices', 'v_device_locations'].forEach(view => {
             const element = document.querySelector(`[data-view-status="${view}"]`);
             if (element) {
-                const exists = status.views && status.views.includes(view);
+                // Case-insensitive comparison to handle any case differences
+                const exists = status.views && status.views.some(v => v.toLowerCase() === view.toLowerCase());
                 element.innerHTML = exists ? '<i class="fas fa-check"></i>' : '<i class="fas fa-times"></i>';
                 element.className = exists ? 'status-good' : 'status-missing';
             }
@@ -330,17 +331,24 @@ class DatabaseManager {
     updateProcedureStatus(status) {
         const procedureElement = document.getElementById('procedure-count');
         const functionElement = document.getElementById('function-count');
+        const triggerElement = document.getElementById('trigger-count');
         
         if (procedureElement) {
             const procedureCount = status.procedures ? status.procedures.length : 0;
-            procedureElement.textContent = `${procedureCount}/4`;
+            procedureElement.textContent = `${procedureCount}/2`;
             procedureElement.className = procedureCount > 0 ? 'status-good' : 'status-missing';
         }
         
         if (functionElement) {
             const functionCount = status.functions ? status.functions.length : 0;
-            functionElement.textContent = `${functionCount}/3`;
+            functionElement.textContent = `${functionCount}/2`;
             functionElement.className = functionCount > 0 ? 'status-good' : 'status-missing';
+        }
+        
+        if (triggerElement) {
+            const triggerCount = status.triggers ? status.triggers.length : 0;
+            triggerElement.textContent = `${triggerCount}/2`;
+            triggerElement.className = triggerCount > 0 ? 'status-good' : 'status-missing';
         }
     }
 
@@ -636,6 +644,8 @@ class DatabaseManager {
                 return 'Stored Procedures';
             case 'functions':
                 return 'Functions';
+            case 'triggers':
+                return 'Triggers';
             default:
                 return 'SQL Content';
         }

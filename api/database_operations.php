@@ -1,4 +1,8 @@
 <?php
+// Suppress any output before JSON
+error_reporting(0);
+ini_set('display_errors', 0);
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
@@ -7,6 +11,9 @@ header('Access-Control-Allow-Headers: Content-Type');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
+
+// Start output buffering to catch any unexpected output
+ob_start();
 
 require_once '../config/database.php';
 
@@ -123,9 +130,10 @@ class DatabaseAPI {
                 if ($result) {
                     $logs = [
                         "✅ All tables created successfully",
-                        "✅ Views created (v_device_summary, v_log_analysis, v_resolver_performance)",
-                        "✅ Stored procedures created (sp_device_health_check, sp_cleanup_old_logs, sp_deploy_device, sp_resolve_issue)",
-                        "✅ Functions created (fn_calculate_uptime, fn_device_risk_score, fn_format_duration)",
+                        "✅ Views created (v_active_devices, v_device_locations)",
+                        "✅ Stored procedures created (sp_count_devices_by_status, sp_get_devices_by_type)",
+                        "✅ Functions created (fn_count_user_devices, fn_device_status_text)",
+                        "✅ Triggers created (trg_device_updated_at, trg_log_new_device)",
                         "✅ Performance indexes created"
                     ];
                 } else {
@@ -301,6 +309,20 @@ class DatabaseAPI {
                 $content = implode("\n\n-- " . str_repeat("=", 50) . "\n\n", $allContent);
                 break;
                 
+            case 'trigger':
+                $content = file_get_contents($sqlDir . 'triggers/' . $name . '.sql');
+                break;
+                
+            case 'triggers':
+                // Get all triggers
+                $triggers = glob($sqlDir . 'triggers/*.sql');
+                $allContent = [];
+                foreach ($triggers as $file) {
+                    $allContent[] = file_get_contents($file);
+                }
+                $content = implode("\n\n-- " . str_repeat("=", 50) . "\n\n", $allContent);
+                break;
+                
             default:
                 throw new Exception('Unknown SQL type');
         }
@@ -409,12 +431,24 @@ class DatabaseAPI {
             $response['data'] = $data;
         }
         
+        // Clear any buffered output
+        ob_clean();
+        
         echo json_encode($response);
         exit;
     }
 }
 
-// Handle the request
-$api = new DatabaseAPI();
-$api->handleRequest();
+// Handle the request with error handling
+try {
+    $api = new DatabaseAPI();
+    $api->handleRequest();
+} catch (Exception $e) {
+    // Clear buffer and send error response
+    ob_clean();
+    echo json_encode([
+        'success' => false,
+        'message' => 'API Error: ' . $e->getMessage()
+    ]);
+}
 ?>

@@ -24,7 +24,6 @@ if ($_POST) {
     $serialNumber = trim($_POST['serial_number']);
     $status = $_POST['status'];
     $purchaseDate = $_POST['purchase_date'];
-    $warrantyExpiry = $_POST['warranty_expiry'];
     $locations = isset($_POST['locations']) ? $_POST['locations'] : [];
     $deploymentNotes = trim($_POST['deployment_notes']);
     
@@ -44,8 +43,9 @@ if ($_POST) {
             }
             
             // SQL Feature: INSERT with foreign key references
-            $deviceSql = "INSERT INTO devices (d_name, t_id, user_id, serial_number, status, purchase_date, warranty_expiry) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?)";
+            // TRIGGER: trg_log_new_device will automatically fire AFTER INSERT to create a log entry
+            $deviceSql = "INSERT INTO devices (d_name, t_id, user_id, serial_number, status, purchase_date) 
+                         VALUES (?, ?, ?, ?, ?, ?)";
             
             $deviceStmt = $conn->prepare($deviceSql);
             $deviceStmt->execute([
@@ -54,11 +54,12 @@ if ($_POST) {
                 $_SESSION['user_id'], 
                 $serialNumber, 
                 $status, 
-                $purchaseDate ?: null, 
-                $warrantyExpiry ?: null
+                $purchaseDate ?: null
             ]);
             
             $deviceId = $conn->lastInsertId();
+            
+            // Note: Trigger 'trg_log_new_device' has automatically created a log entry for this new device
             
             // SQL Feature: Bulk INSERT for deployments if locations selected
             if (!empty($locations)) {
@@ -91,7 +92,7 @@ if ($_POST) {
 }
 
 // Get device types for dropdown
-$typesQuery = "SELECT t_id, t_name, description FROM device_types ORDER BY t_name";
+$typesQuery = "SELECT t_id, t_name FROM device_types ORDER BY t_name";
 $typesStmt = $conn->prepare($typesQuery);
 $typesStmt->execute();
 $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -166,7 +167,8 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                     <div class="ml-3">
                         <p class="text-sm text-blue-700">
                             <strong>SQL Features:</strong> INSERT with foreign keys, Transaction handling (BEGIN/COMMIT/ROLLBACK), 
-                            EXISTS for validation, Bulk INSERT for deployments, lastInsertId()
+                            EXISTS for validation, Bulk INSERT for deployments, lastInsertId(), 
+                            <span class="inline-block px-2 py-1 bg-orange-100 text-orange-800 rounded">1 Trigger (trg_log_new_device - Auto-creates log AFTER INSERT)</span>
                         </p>
                     </div>
                 </div>
@@ -263,17 +265,6 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
                         
-                        <!-- Warranty Expiry -->
-                        <div>
-                            <label for="warranty_expiry" class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-shield-alt mr-2"></i>Warranty Expiry
-                            </label>
-                            <input type="date" 
-                                   id="warranty_expiry" 
-                                   name="warranty_expiry"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        
                         <!-- Locations (Multi-select) -->
                         <div class="md:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -335,7 +326,7 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                                     SELECT EXISTS(SELECT 1 FROM devices WHERE serial_number = ?)<br><br>
                                     2. Insert device:<br>
                                     INSERT INTO devices (d_name, t_id, user_id, serial_number, status, purchase_date, warranty_expiry)<br>
-                                    VALUES (?, ?, ?, ?, ?, ?, ?)<br><br>
+                                    VALUES (?, ?, ?, ?, ?, ?)<br><br>
                                     3. Insert deployments:<br>
                                     INSERT INTO deployments (d_id, loc_id, deployed_by, deployment_notes)<br>
                                     VALUES (?, ?, ?, ?)<br><br>
@@ -380,16 +371,6 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
     
     <script>
-        // Auto-calculate warranty expiry (2 years from purchase date)
-        document.getElementById('purchase_date').addEventListener('change', function() {
-            const purchaseDate = new Date(this.value);
-            if (purchaseDate) {
-                const warrantyDate = new Date(purchaseDate);
-                warrantyDate.setFullYear(warrantyDate.getFullYear() + 2);
-                document.getElementById('warranty_expiry').value = warrantyDate.toISOString().split('T')[0];
-            }
-        });
-        
         // Generate serial number suggestion
         document.getElementById('device_type').addEventListener('change', function() {
             const typeSelect = this;

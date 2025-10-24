@@ -190,6 +190,9 @@ class Database {
             // Create Stored Procedures
             $this->createProcedures();
             
+            // Create Triggers
+            $this->createTriggers();
+            
             // Create Optimized Indexes
             $this->createIndexes();
             
@@ -205,9 +208,8 @@ class Database {
      */
     private function createViews() {
         $viewFiles = [
-            'v_device_summary.sql',
-            'v_log_analysis.sql',
-            'v_resolver_performance.sql'
+            'v_active_devices.sql',
+            'v_device_locations.sql'
         ];
         
         foreach ($viewFiles as $file) {
@@ -220,10 +222,8 @@ class Database {
      */
     private function createProcedures() {
         $procedureFiles = [
-            'sp_device_health_check.sql',
-            'sp_cleanup_old_logs.sql',
-            'sp_deploy_device.sql',
-            'sp_resolve_issue.sql'
+            'sp_count_devices_by_status.sql',
+            'sp_get_devices_by_type.sql'
         ];
         
         foreach ($procedureFiles as $file) {
@@ -236,13 +236,26 @@ class Database {
      */
     private function createFunctions() {
         $functionFiles = [
-            'fn_calculate_uptime.sql',
-            'fn_device_risk_score.sql',
-            'fn_format_duration.sql'
+            'fn_count_user_devices.sql',
+            'fn_device_status_text.sql'
         ];
         
         foreach ($functionFiles as $file) {
             $this->executeSQLFile("sql/functions/$file");
+        }
+    }
+    
+    /**
+     * Create triggers from external files
+     */
+    private function createTriggers() {
+        $triggerFiles = [
+            'trg_device_updated_at.sql',
+            'trg_log_new_device.sql'
+        ];
+        
+        foreach ($triggerFiles as $file) {
+            $this->executeSQLFile("sql/triggers/$file");
         }
     }
     
@@ -401,6 +414,7 @@ class Database {
             'views' => [],
             'procedures' => [],
             'functions' => [],
+            'triggers' => [],
             'table_info' => []
         ];
         
@@ -464,6 +478,13 @@ class Database {
             $stmt->execute([$this->db_name]);
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $status['functions'][] = $row['Name'];
+            }
+            
+            // Get triggers
+            $stmt = $this->conn->prepare("SHOW TRIGGERS FROM " . $this->db_name);
+            $stmt->execute();
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $status['triggers'][] = $row['Trigger'];
             }
             
             // Get detailed table information
