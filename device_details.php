@@ -210,7 +210,7 @@ $availableLocations = $availableStmt->fetchAll(PDO::FETCH_ASSOC);
 $logsQuery = "
     SELECT 
         dl.*,
-        a.alert_id,
+        a.log_id as has_alert,
         a.status as alert_status,
         CONCAT(resolver.f_name, ' ', resolver.l_name) as resolver_name
     FROM device_logs dl
@@ -552,7 +552,7 @@ $healthBgClass = $device['health_score'] >= 80 ? 'bg-green-100' : ($device['heal
                                         <?php echo strtoupper($log['log_type']); ?>
                                     </span>
                                     <span class="text-sm font-medium text-gray-600">Severity: <?php echo $log['severity_level']; ?></span>
-                                    <?php if ($log['alert_id']): ?>
+                                    <?php if (!empty($log['has_alert'])): ?>
                                         <span class="px-2 py-1 rounded text-xs font-medium <?php 
                                             echo $log['alert_status'] === 'active' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600'; 
                                         ?>">

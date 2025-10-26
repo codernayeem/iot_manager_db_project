@@ -32,7 +32,7 @@ if ($_POST) {
             $conn->beginTransaction();
             
             // Check if serial number already exists
-            $checkSql = "SELECT EXISTS(SELECT 1 FROM devices WHERE serial_number = ?) as exists";
+            $checkSql = "SELECT EXISTS(SELECT 1 FROM devices WHERE serial_number = ?) as serial_exists";
             $checkStmt = $conn->prepare($checkSql);
             $checkStmt->execute([$serialNumber]);
             $exists = $checkStmt->fetchColumn();
