@@ -291,12 +291,12 @@ class DatabaseManager {
         const tablesElement = document.getElementById('tables-status');
         if (tablesElement) {
             const tableCount = status.tables ? status.tables.length : 0;
-            tablesElement.textContent = `(${tableCount}/6)`;
+            tablesElement.textContent = `(${tableCount}/7)`;
             tablesElement.className = tableCount > 0 ? 'status-good' : 'status-missing';
         }
 
         // Update individual table status
-        ['users', 'device_types', 'devices', 'locations', 'deployments', 'device_logs'].forEach(table => {
+        ['users', 'device_types', 'devices', 'locations', 'deployments', 'device_logs', 'alerts'].forEach(table => {
             const element = document.querySelector(`[data-table-status="${table}"]`);
             if (element) {
                 const exists = status.tables && status.tables.includes(table);
@@ -314,7 +314,7 @@ class DatabaseManager {
         }
 
         // Update views status
-        ['v_active_devices', 'v_device_locations'].forEach(view => {
+        ['v_device_deployment_summary', 'v_unresolved_critical_logs'].forEach(view => {
             const element = document.querySelector(`[data-view-status="${view}"]`);
             if (element) {
                 // Case-insensitive comparison to handle any case differences
@@ -347,7 +347,7 @@ class DatabaseManager {
         
         if (triggerElement) {
             const triggerCount = status.triggers ? status.triggers.length : 0;
-            triggerElement.textContent = `${triggerCount}/2`;
+            triggerElement.textContent = `${triggerCount}/5`;
             triggerElement.className = triggerCount > 0 ? 'status-good' : 'status-missing';
         }
     }
@@ -371,7 +371,8 @@ class DatabaseManager {
             'devices': 'Registered IoT devices',
             'locations': 'Device deployment locations',
             'deployments': 'Device-location assignments',
-            'device_logs': 'Device activity and error logs'
+            'device_logs': 'Device activity and error logs',
+            'alerts': 'Auto-generated alerts from high-severity errors'
         };
 
         const tableCards = status.tables.map(table => {

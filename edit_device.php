@@ -128,7 +128,8 @@ $currentDeploymentsQuery = "
     SELECT dep.*, l.loc_name 
     FROM deployments dep
     INNER JOIN locations l ON dep.loc_id = l.loc_id
-    WHERE dep.d_id = ? AND dep.is_active = 1
+    WHERE dep.d_id = ? 
+    ORDER BY dep.deployed_at DESC
 ";
 $currentStmt = $conn->prepare($currentDeploymentsQuery);
 $currentStmt->execute([$deviceId]);
@@ -161,10 +162,9 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
             transition: all 0.3s ease;
         }
         
-        .status-active { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .status-info { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
+        .status-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
         .status-error { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
-        .status-maintenance { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
-        .status-inactive { background: linear-gradient(135deg, #6b7280, #4b5563); color: white; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -272,17 +272,14 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
                                     name="status" 
                                     onchange="updateStatusPreview()"
                                     class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="active" <?php echo $device['status'] === 'active' ? 'selected' : ''; ?>>
-                                    Active - Device is operational and working normally
+                                <option value="info" <?php echo $device['status'] === 'info' ? 'selected' : ''; ?>>
+                                    Info - Device operating normally
                                 </option>
-                                <option value="inactive" <?php echo $device['status'] === 'inactive' ? 'selected' : ''; ?>>
-                                    Inactive - Device is turned off or not in use
-                                </option>
-                                <option value="maintenance" <?php echo $device['status'] === 'maintenance' ? 'selected' : ''; ?>>
-                                    Maintenance - Device is undergoing maintenance or repairs
+                                <option value="warning" <?php echo $device['status'] === 'warning' ? 'selected' : ''; ?>>
+                                    Warning - Device needs attention
                                 </option>
                                 <option value="error" <?php echo $device['status'] === 'error' ? 'selected' : ''; ?>>
-                                    Error - Device has errors or malfunctions
+                                    Error - Device has critical issues
                                 </option>
                             </select>
                             <div id="status-preview" class="status-preview status-<?php echo $device['status']; ?>">

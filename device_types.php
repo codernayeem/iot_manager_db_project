@@ -143,18 +143,23 @@ $statsStmt = $conn->prepare($statsQuery);
 $statsStmt->execute();
 $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
 
-// SQL Feature: Using STORED PROCEDURE sp_get_devices_by_type()
-// Get sample devices for each type using stored procedure
+// Get sample devices for each type
 $devicesByType = [];
 try {
     foreach ($deviceTypes as $type) {
-        $procStmt = $conn->prepare("CALL sp_get_devices_by_type(?)");
-        $procStmt->execute([$type['t_id']]);
-        $devicesByType[$type['t_id']] = $procStmt->fetchAll(PDO::FETCH_ASSOC);
-        $procStmt->closeCursor(); // Important: close cursor after each call
+        $devicesStmt = $conn->prepare("
+            SELECT d.d_id, d.d_name, d.serial_number, d.status, 
+                   CONCAT(u.f_name, ' ', u.l_name) as owner_name
+            FROM devices d
+            INNER JOIN users u ON d.user_id = u.user_id
+            WHERE d.t_id = ?
+            ORDER BY d.created_at DESC
+            LIMIT 5
+        ");
+        $devicesStmt->execute([$type['t_id']]);
+        $devicesByType[$type['t_id']] = $devicesStmt->fetchAll(PDO::FETCH_ASSOC);
     }
 } catch (Exception $e) {
-    // Procedure might not exist yet
     $devicesByType = [];
 }
 ?>
@@ -193,7 +198,7 @@ try {
                     <h3 class="font-semibold text-gray-800 mb-1">SQL Features Demonstrated</h3>
                     <p class="text-sm text-gray-600">
                         <strong>SQL Features Used:</strong> 
-                        <span class="inline-block px-2 py-1 bg-purple-100 text-purple-800 rounded mr-2">1 Stored Procedure (sp_get_devices_by_type with IF/ELSE, WHILE LOOP)</span>
+                        <span class="inline-block px-2 py-1 bg-purple-100 text-purple-800 rounded mr-2">Complex JOIN with aggregation</span>
                         <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex JOINs</span>
                         <span class="inline-block px-2 py-1 bg-white rounded mr-2">GROUP BY with COUNT</span>
                         <span class="inline-block px-2 py-1 bg-white rounded">ORDER BY with sorting</span>
@@ -424,10 +429,9 @@ try {
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold 
                                             <?php echo $type['device_count'] > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'; ?>" 
-                                            title="Using PROCEDURE: sp_get_devices_by_type(<?php echo $type['t_id']; ?>) - Fetches devices with IF/ELSE and WHILE LOOP">
+                                            title="Total devices of this type">
                                             <i class="fas fa-microchip mr-1"></i>
                                             <?php echo $type['device_count']; ?>
-                                            <i class="fas fa-database ml-1 text-xs text-purple-600"></i>
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">

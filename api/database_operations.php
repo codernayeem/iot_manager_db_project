@@ -130,10 +130,10 @@ class DatabaseAPI {
                 if ($result) {
                     $logs = [
                         "✅ All tables created successfully",
-                        "✅ Views created (v_active_devices, v_device_locations)",
-                        "✅ Stored procedures created (sp_count_devices_by_status, sp_get_devices_by_type)",
-                        "✅ Functions created (fn_count_user_devices, fn_device_status_text)",
-                        "✅ Triggers created (trg_device_updated_at, trg_log_new_device)",
+                        "✅ Views created (v_device_deployment_summary, v_unresolved_critical_logs)",
+                        "✅ Stored procedures created (sp_generate_device_report, sp_bulk_resolve_alerts)",
+                        "✅ Functions created (fn_get_device_health_score, fn_get_alert_summary)",
+                        "✅ Triggers created (5 triggers for automation)",
                         "✅ Performance indexes created"
                     ];
                 } else {
@@ -211,7 +211,7 @@ class DatabaseAPI {
                     // Create tables
                     if ($success) {
                         $status = $this->getFreshStatus();
-                        if (count($status['tables']) < 6) {
+                        if (count($status['tables']) < 7) {
                             if ($this->database->createTables()) {
                                 $logs[] = "✅ All tables created successfully";
                                 $logs[] = "✅ Views, procedures, functions, and indexes created";
@@ -227,7 +227,7 @@ class DatabaseAPI {
                     // Insert sample data
                     if ($success) {
                         $status = $this->getFreshStatus();
-                        if (count($status['tables']) >= 6) {
+                        if (count($status['tables']) >= 7) {
                             $conn = $this->database->getConnection();
                             $stmt = $conn->prepare("SELECT COUNT(*) FROM users");
                             $stmt->execute();

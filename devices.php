@@ -49,37 +49,37 @@ if (!empty($statusFilter)) {
 }
 
 if ($locationFilter > 0) {
-    $whereConditions[] = "EXISTS (SELECT 1 FROM deployments dep_filter WHERE dep_filter.d_id = d.d_id AND dep_filter.loc_id = ? AND dep_filter.is_active = 1)";
+    $whereConditions[] = "EXISTS (SELECT 1 FROM deployments dep_filter WHERE dep_filter.d_id = d.d_id AND dep_filter.loc_id = ?)";
     $params[] = $locationFilter;
 }
 
 $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereConditions) : "";
 
 // SQL Feature: Complex query with multiple JOINs, subqueries, and FUNCTION usage
-// Using FUNCTION: fn_device_status_text(status) to format status
+// Using FUNCTIONS: fn_get_device_health_score and fn_get_alert_summary
 $devicesQuery = "
     SELECT 
         d.d_id,
         d.d_name,
         d.serial_number,
         d.status,
-        fn_device_status_text(d.status) as status_text,
         d.purchase_date,
         d.created_at,
         d.updated_at,
         dt.t_name as device_type,
         CONCAT(u.f_name, ' ', u.l_name) as owner_name,
         u.email as owner_email,
-        fn_count_user_devices(u.user_id) as user_device_count,
         (SELECT COUNT(*) FROM device_logs dl WHERE dl.d_id = d.d_id AND dl.log_type = 'error' AND dl.resolved_by IS NULL) as unresolved_errors,
         (SELECT COUNT(*) FROM device_logs dl WHERE dl.d_id = d.d_id) as total_logs,
+        (SELECT COUNT(*) FROM alerts a INNER JOIN device_logs dl ON a.log_id = dl.log_id WHERE dl.d_id = d.d_id AND a.status = 'active') as active_alerts,
         (SELECT MAX(dl.log_time) FROM device_logs dl WHERE dl.d_id = d.d_id) as last_activity,
+        fn_get_device_health_score(d.d_id) as health_score,
         GROUP_CONCAT(DISTINCT l.loc_name ORDER BY dep.deployed_at DESC SEPARATOR ', ') as deployed_locations,
         COUNT(DISTINCT dep.loc_id) as location_count
     FROM devices d
     INNER JOIN device_types dt ON d.t_id = dt.t_id
     INNER JOIN users u ON d.user_id = u.user_id
-    LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+    LEFT JOIN deployments dep ON d.d_id = dep.d_id
     LEFT JOIN locations l ON dep.loc_id = l.loc_id
     $whereClause
     GROUP BY d.d_id, d.d_name, d.serial_number, d.status, d.purchase_date, 
@@ -98,7 +98,7 @@ $countQuery = "
     FROM devices d
     INNER JOIN device_types dt ON d.t_id = dt.t_id
     INNER JOIN users u ON d.user_id = u.user_id
-    LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+    LEFT JOIN deployments dep ON d.d_id = dep.d_id
     LEFT JOIN locations l ON dep.loc_id = l.loc_id
     $whereClause
 ";
@@ -171,10 +171,9 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
             font-weight: 600;
         }
         
-        .status-active { background-color: #dcfce7; color: #166534; }
+        .status-info { background-color: #dbeafe; color: #1e40af; }
+        .status-warning { background-color: #fef3c7; color: #d97706; }
         .status-error { background-color: #fee2e2; color: #dc2626; }
-        .status-maintenance { background-color: #fef3c7; color: #d97706; }
-        .status-inactive { background-color: #f3f4f6; color: #6b7280; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -203,7 +202,7 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                 <div class="ml-3">
                     <p class="text-sm text-blue-700">
                         <strong>SQL Features Used:</strong> 
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">2 Functions (fn_device_status_text, fn_count_user_devices)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">2 Functions (fn_get_device_health_score, fn_get_alert_summary)</span>
                         <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex JOINs (INNER, LEFT)</span>
                         <span class="inline-block px-2 py-1 bg-white rounded mr-2">GROUP BY, Subqueries, Pagination</span>
                     </p>
@@ -240,9 +239,8 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                     <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Status</label>
                     <select id="status" name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
                         <option value="">All Status</option>
-                        <option value="active" <?php echo $statusFilter === 'active' ? 'selected' : ''; ?>>Active</option>
-                        <option value="inactive" <?php echo $statusFilter === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                        <option value="maintenance" <?php echo $statusFilter === 'maintenance' ? 'selected' : ''; ?>>Maintenance</option>
+                        <option value="info" <?php echo $statusFilter === 'info' ? 'selected' : ''; ?>>Info</option>
+                        <option value="warning" <?php echo $statusFilter === 'warning' ? 'selected' : ''; ?>>Warning</option>
                         <option value="error" <?php echo $statusFilter === 'error' ? 'selected' : ''; ?>>Error</option>
                     </select>
                 </div>
@@ -339,9 +337,6 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                             <span class="status-badge status-<?php echo $device['status']; ?>">
                                 <?php echo ucfirst($device['status']); ?>
                             </span>
-                            <p class="text-xs text-gray-500 mt-1">
-                                <i class="fas fa-database"></i> fn_device_status_text()
-                            </p>
                         </div>
                     </div>
                     
@@ -358,16 +353,15 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                         
                         <div class="flex justify-between text-sm bg-green-50 p-2 rounded">
                             <span class="text-gray-600">
-                                <i class="fas fa-database text-green-600 mr-1"></i>User's Devices:
+                                <i class="fas fa-heart-pulse text-green-600 mr-1"></i>Health Score:
                             </span>
-                            <span class="text-gray-800 font-semibold"><?php echo $device['user_device_count']; ?></span>
-                        </div>
-                        
-                        <div class="flex justify-between text-sm bg-blue-50 p-2 rounded">
-                            <span class="text-gray-600">
-                                <i class="fas fa-database text-blue-600 mr-1"></i>Status Text:
+                            <span class="text-gray-800 font-semibold">
+                                <?php 
+                                $health = $device['health_score'];
+                                $healthColor = $health >= 70 ? 'text-green-600' : ($health >= 40 ? 'text-yellow-600' : 'text-red-600');
+                                ?>
+                                <span class="<?php echo $healthColor; ?>"><?php echo number_format($health, 1); ?>/100</span>
                             </span>
-                            <span class="text-gray-800 text-xs"><?php echo htmlspecialchars($device['status_text']); ?></span>
                         </div>
                         
                         <?php if ($device['deployed_locations']): ?>
@@ -384,10 +378,19 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                             <span class="text-gray-800"><?php echo $device['total_logs']; ?></span>
                         </div>
                         
+                        <?php if ($device['active_alerts'] > 0): ?>
+                            <div class="flex justify-between text-sm bg-red-50 p-2 rounded">
+                                <span class="text-red-600">
+                                    <i class="fas fa-triangle-exclamation mr-1"></i>Active Alerts:
+                                </span>
+                                <span class="text-red-600 font-semibold"><?php echo $device['active_alerts']; ?></span>
+                            </div>
+                        <?php endif; ?>
+                        
                         <?php if ($device['unresolved_errors'] > 0): ?>
                             <div class="flex justify-between text-sm">
-                                <span class="text-red-600">Unresolved Errors:</span>
-                                <span class="text-red-600 font-semibold"><?php echo $device['unresolved_errors']; ?></span>
+                                <span class="text-orange-600">Unresolved Errors:</span>
+                                <span class="text-orange-600 font-semibold"><?php echo $device['unresolved_errors']; ?></span>
                             </div>
                         <?php endif; ?>
                         

@@ -37,7 +37,7 @@ if (!empty($search)) {
 
 $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereConditions) : "";
 
-// SQL Feature: Using FUNCTION fn_count_user_devices() with complex query
+// SQL Feature: Complex query with aggregation and CASE statements
 $usersQuery = "
     SELECT 
         u.user_id,
@@ -46,8 +46,9 @@ $usersQuery = "
         u.email,
         u.created_at,
         u.updated_at,
-        fn_count_user_devices(u.user_id) as device_count,
-        COUNT(DISTINCT CASE WHEN d.status = 'active' THEN d.d_id END) as active_devices,
+        COUNT(DISTINCT d.d_id) as device_count,
+        COUNT(DISTINCT CASE WHEN d.status = 'info' THEN d.d_id END) as info_devices,
+        COUNT(DISTINCT CASE WHEN d.status = 'warning' THEN d.d_id END) as warning_devices,
         COUNT(DISTINCT CASE WHEN d.status = 'error' THEN d.d_id END) as error_devices,
         MAX(d.updated_at) as last_device_update,
         (SELECT COUNT(*) FROM device_logs dl 
@@ -179,7 +180,7 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                 <div class="ml-3">
                     <p class="text-sm text-blue-700">
                         <strong>SQL Features Used:</strong> 
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">1 Function (fn_count_user_devices with IF/ELSE)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex aggregation with CASE statements</span>
                         <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex JOINs, Subqueries, GROUP BY, Pagination</span>
                     </p>
                 </div>
@@ -369,12 +370,17 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title="Using FUNCTION: fn_count_user_devices(user_id)">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title="Total device count">
                                             <i class="fas fa-database mr-1"></i><?php echo $user['device_count']; ?> Total
                                         </span>
-                                        <?php if ($user['active_devices'] > 0): ?>
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 ml-1">
-                                                <?php echo $user['active_devices']; ?> Active
+                                        <?php if ($user['info_devices'] > 0): ?>
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 ml-1">
+                                                <?php echo $user['info_devices']; ?> Info
+                                            </span>
+                                        <?php endif; ?>
+                                        <?php if ($user['warning_devices'] > 0): ?>
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 ml-1">
+                                                <?php echo $user['warning_devices']; ?> Warning
                                             </span>
                                         <?php endif; ?>
                                         <?php if ($user['error_devices'] > 0): ?>

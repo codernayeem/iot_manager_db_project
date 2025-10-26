@@ -24,16 +24,16 @@ SOURCE sql/triggers/trg_create_alert_from_log.sql;
 SOURCE sql/triggers/trg_update_alert_status.sql;
 
 -- 4. Create Views
-SOURCE sql/views/v_active_devices.sql;
-SOURCE sql/views/v_device_locations.sql;
+SOURCE sql/views/v_device_deployment_summary.sql;
+SOURCE sql/views/v_unresolved_critical_logs.sql;
 
 -- 5. Create Functions
-SOURCE sql/functions/fn_count_user_devices.sql;
-SOURCE sql/functions/fn_device_status_text.sql;
+SOURCE sql/functions/fn_get_device_health_score.sql;
+SOURCE sql/functions/fn_get_alert_summary.sql;
 
 -- 6. Create Stored Procedures
-SOURCE sql/procedures/sp_count_devices_by_status.sql;
-SOURCE sql/procedures/sp_get_devices_by_type.sql;
+SOURCE sql/procedures/sp_generate_device_report.sql;
+SOURCE sql/procedures/sp_bulk_resolve_alerts.sql;
 
 -- 7. Create Performance Indexes
 SOURCE sql/indexes/performance_indexes.sql;

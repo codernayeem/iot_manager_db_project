@@ -159,7 +159,8 @@ class Database {
                 'locations.sql', 
                 'devices.sql',
                 'deployments.sql',
-                'device_logs.sql'
+                'device_logs.sql',
+                'alerts.sql'
             ];
             
             foreach ($tableFiles as $file) {
@@ -208,8 +209,8 @@ class Database {
      */
     private function createViews() {
         $viewFiles = [
-            'v_active_devices.sql',
-            'v_device_locations.sql'
+            'v_device_deployment_summary.sql',
+            'v_unresolved_critical_logs.sql'
         ];
         
         foreach ($viewFiles as $file) {
@@ -222,8 +223,8 @@ class Database {
      */
     private function createProcedures() {
         $procedureFiles = [
-            'sp_count_devices_by_status.sql',
-            'sp_get_devices_by_type.sql'
+            'sp_generate_device_report.sql',
+            'sp_bulk_resolve_alerts.sql'
         ];
         
         foreach ($procedureFiles as $file) {
@@ -236,8 +237,8 @@ class Database {
      */
     private function createFunctions() {
         $functionFiles = [
-            'fn_count_user_devices.sql',
-            'fn_device_status_text.sql'
+            'fn_get_device_health_score.sql',
+            'fn_get_alert_summary.sql'
         ];
         
         foreach ($functionFiles as $file) {
@@ -250,8 +251,11 @@ class Database {
      */
     private function createTriggers() {
         $triggerFiles = [
-            'trg_device_updated_at.sql',
-            'trg_log_new_device.sql'
+            'trg_users_updated_at.sql',
+            'trg_locations_updated_at.sql',
+            'trg_devices_updated_at.sql',
+            'trg_create_alert_from_log.sql',
+            'trg_update_alert_status.sql'
         ];
         
         foreach ($triggerFiles as $file) {
@@ -275,22 +279,19 @@ class Database {
         try {
             $this->conn->beginTransaction();
             
-            // Execute demo data files in dependency order (excluding device logs)
+            // Execute demo data files in dependency order
             $dataFiles = [
                 'users_data.sql',
                 'device_types_data.sql', 
                 'locations_data.sql',
                 'devices_data.sql',
-                'deployments_data.sql'
-                // Note: device_logs are generated programmatically, not from static file
+                'deployments_data.sql',
+                'device_logs_data.sql'  // Triggers will auto-create alerts
             ];
             
             foreach ($dataFiles as $file) {
                 $this->executeSQLFile("sql/demo_data/$file");
             }
-            
-            // Generate realistic log data programmatically (this is the correct approach)
-            $this->generateRealisticLogs();
             
             $this->conn->commit();
             return true;
@@ -488,7 +489,7 @@ class Database {
             }
             
             // Get detailed table information
-            $tables = ['users', 'device_types', 'devices', 'locations', 'deployments', 'device_logs'];
+            $tables = ['users', 'device_types', 'devices', 'locations', 'deployments', 'device_logs', 'alerts'];
             foreach ($tables as $table) {
                 if (in_array($table, $status['tables'])) {
                     $tableInfo = $this->getTableInfo($table);

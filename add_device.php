@@ -248,9 +248,9 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                             <select id="status" 
                                     name="status"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="inactive">Inactive</option>
-                                <option value="active">Active</option>
-                                <option value="maintenance">Maintenance</option>
+                                <option value="info">Info - Normal Operation</option>
+                                <option value="warning">Warning - Needs Attention</option>
+                                <option value="error">Error - Critical Issue</option>
                             </select>
                         </div>
                         

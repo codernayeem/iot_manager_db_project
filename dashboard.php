@@ -39,9 +39,11 @@ try {
         $dashboardStats = "
             SELECT 
                 (SELECT COUNT(*) FROM devices) as total_devices,
-                (SELECT COUNT(*) FROM devices WHERE status = 'active') as active_devices,
+                (SELECT COUNT(*) FROM devices WHERE status = 'info') as info_devices,
+                (SELECT COUNT(*) FROM devices WHERE status = 'warning') as warning_devices,
                 (SELECT COUNT(*) FROM devices WHERE status = 'error') as error_devices,
                 (SELECT COUNT(*) FROM device_logs WHERE log_type = 'error' AND resolved_by IS NULL) as unresolved_errors,
+                (SELECT COUNT(*) FROM alerts WHERE status = 'active') as active_alerts,
                 (SELECT COUNT(*) FROM locations) as total_locations,
                 (SELECT COUNT(DISTINCT user_id) FROM devices) as active_users
         ";
@@ -49,16 +51,6 @@ try {
         $stmt = $conn->prepare($dashboardStats);
         $stmt->execute();
         $stats = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        // SQL Feature: Using stored procedure to count devices by status
-        // CALL sp_count_devices_by_status()
-        try {
-            $statusStmt = $conn->query("CALL sp_count_devices_by_status()");
-            $deviceStatusCounts = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
-            $statusStmt->closeCursor();
-        } catch (Exception $e) {
-            $deviceStatusCounts = [];
-        }
     }
 } catch (PDOException $e) {
     // Database not ready yet, use default values
@@ -74,9 +66,9 @@ try {
             SELECT 
                 dt.t_name,
                 COUNT(d.d_id) as device_count,
-                SUM(CASE WHEN d.status = 'active' THEN 1 ELSE 0 END) as active_count,
-                SUM(CASE WHEN d.status = 'error' THEN 1 ELSE 0 END) as error_count,
-                SUM(CASE WHEN d.status = 'maintenance' THEN 1 ELSE 0 END) as maintenance_count
+                SUM(CASE WHEN d.status = 'info' THEN 1 ELSE 0 END) as info_count,
+                SUM(CASE WHEN d.status = 'warning' THEN 1 ELSE 0 END) as warning_count,
+                SUM(CASE WHEN d.status = 'error' THEN 1 ELSE 0 END) as error_count
             FROM device_types dt
             LEFT JOIN devices d ON dt.t_id = d.t_id
             GROUP BY dt.t_id, dt.t_name
@@ -87,11 +79,11 @@ try {
         $stmt->execute();
         $deviceTypes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // SQL Feature: Using VIEW v_active_devices to get active devices
+        // SQL Feature: Using VIEW v_device_deployment_summary to get device overview
         // VIEW usage: SELECT from view instead of complex JOIN
         try {
-            $activeDevicesQuery = "SELECT * FROM v_active_devices LIMIT 5";
-            $activeDevicesStmt = $conn->query($activeDevicesQuery);
+            $devicesOverviewQuery = "SELECT * FROM v_device_deployment_summary LIMIT 5";
+            $activeDevicesStmt = $conn->query($devicesOverviewQuery);
             $activeDevicesList = $activeDevicesStmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Exception $e) {
             $activeDevicesList = [];
@@ -204,10 +196,9 @@ try {
             font-weight: 600;
         }
         
-        .status-active { background-color: #dcfce7; color: #166534; }
+        .status-info { background-color: #dbeafe; color: #1e40af; }
+        .status-warning { background-color: #fef3c7; color: #d97706; }
         .status-error { background-color: #fee2e2; color: #dc2626; }
-        .status-maintenance { background-color: #fef3c7; color: #d97706; }
-        .status-inactive { background-color: #f3f4f6; color: #6b7280; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -264,17 +255,17 @@ try {
                 <div class="bg-white rounded-lg shadow-md p-4">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <i class="fas fa-check-circle text-green-600 text-2xl"></i>
+                            <i class="fas fa-bell text-yellow-600 text-2xl"></i>
                         </div>
                         <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Active Devices</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['active_devices']; ?></p>
+                            <p class="text-sm font-medium text-gray-600">Active Alerts</p>
+                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['active_alerts']; ?></p>
                         </div>
                     </div>
                 </div>
                 <span class="tooltip-text">
                     SQL Query:<br>
-                    SELECT COUNT(*) FROM devices<br>
+                    SELECT COUNT(*) FROM alerts<br>
                     WHERE status = 'active'
                 </span>
             </div>
@@ -286,7 +277,7 @@ try {
                             <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
                         </div>
                         <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Error Devices</p>
+                            <p class="text-sm font-medium text-gray-600">Error Status</p>
                             <p class="text-2xl font-bold text-gray-900"><?php echo $stats['error_devices']; ?></p>
                         </div>
                     </div>
@@ -358,49 +349,65 @@ try {
         
         <!-- Database Features Demo -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <!-- Stored Procedure: sp_count_devices_by_status -->
+            <!-- Stored Procedure Example: sp_generate_device_report -->
             <div class="bg-white rounded-lg shadow-md p-6">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-xl font-bold text-gray-800">
-                        <i class="fas fa-cogs mr-2"></i>Device Status Count
+                        <i class="fas fa-cogs mr-2"></i>Device Status Summary
                     </h2>
-                    <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">STORED PROCEDURE</span>
+                    <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">QUERY</span>
                 </div>
                 <div class="bg-gray-50 p-3 rounded mb-4">
                     <code class="text-xs text-gray-700">
-                        <strong>CALL</strong> sp_count_devices_by_status()<br>
-                        <span class="text-gray-500">Features: CURSOR, LOOP, IF/ELSEIF, Variables</span>
+                        <strong>Available Procedure:</strong> sp_generate_device_report(status)<br>
+                        <span class="text-gray-500">Features: CURSOR, LOOP, IF/ELSE, Temporary Tables</span>
                     </code>
                 </div>
                 <div class="space-y-2">
-                    <?php if (!empty($deviceStatusCounts)): ?>
-                        <?php foreach ($deviceStatusCounts as $statusItem): ?>
+                    <?php
+                    // Show simple device status summary
+                    try {
+                        $conn = $database->getConnection();
+                        $statusQuery = "SELECT status, COUNT(*) as count FROM devices GROUP BY status";
+                        $statusStmt = $conn->query($statusQuery);
+                        $statusResults = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
+                    } catch (Exception $e) {
+                        $statusResults = [];
+                    }
+                    ?>
+                    <?php if (!empty($statusResults)): ?>
+                        <?php foreach ($statusResults as $statusItem): ?>
                             <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
                                 <div>
                                     <span class="font-semibold text-gray-800"><?php echo ucfirst($statusItem['status']); ?></span>
-                                    <p class="text-xs text-gray-500"><?php echo $statusItem['status_label']; ?></p>
+                                    <p class="text-xs text-gray-500">
+                                        <?php 
+                                        echo $statusItem['status'] === 'info' ? 'Normal Operation' : 
+                                            ($statusItem['status'] === 'warning' ? 'Needs Attention' : 'Critical Issue');
+                                        ?>
+                                    </p>
                                 </div>
-                                <span class="text-2xl font-bold text-blue-600"><?php echo $statusItem['device_count']; ?></span>
+                                <span class="text-2xl font-bold text-blue-600"><?php echo $statusItem['count']; ?></span>
                             </div>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <p class="text-gray-500 text-sm">No data available</p>
+                        <p class="text-gray-500 text-sm">No devices found</p>
                     <?php endif; ?>
                 </div>
             </div>
             
-            <!-- View: v_active_devices -->
+            <!-- View: v_device_deployment_summary -->
             <div class="bg-white rounded-lg shadow-md p-6">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-xl font-bold text-gray-800">
-                        <i class="fas fa-eye mr-2"></i>Active Devices
+                        <i class="fas fa-eye mr-2"></i>Device Deployment Summary
                     </h2>
                     <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">VIEW</span>
                 </div>
                 <div class="bg-gray-50 p-3 rounded mb-4">
                     <code class="text-xs text-gray-700">
-                        <strong>SELECT * FROM</strong> v_active_devices<br>
-                        <span class="text-gray-500">Features: INNER JOIN, WHERE</span>
+                        <strong>SELECT * FROM</strong> v_device_deployment_summary<br>
+                        <span class="text-gray-500">Features: Multiple JOINs, GROUP BY, COUNT DISTINCT, Subqueries</span>
                     </code>
                 </div>
                 <div class="space-y-2">
@@ -418,7 +425,7 @@ try {
                             </div>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <p class="text-gray-500 text-sm">No active devices</p>
+                        <p class="text-gray-500 text-sm">No devices found</p>
                     <?php endif; ?>
                 </div>
             </div>
@@ -455,12 +462,14 @@ try {
                                 </div>
                             </div>
                             <div class="flex space-x-2">
-                                <span class="status-badge status-active"><?php echo $type['active_count']; ?> Active</span>
+                                <?php if ($type['info_count'] > 0): ?>
+                                    <span class="status-badge status-info"><?php echo $type['info_count']; ?> Info</span>
+                                <?php endif; ?>
+                                <?php if ($type['warning_count'] > 0): ?>
+                                    <span class="status-badge status-warning"><?php echo $type['warning_count']; ?> Warning</span>
+                                <?php endif; ?>
                                 <?php if ($type['error_count'] > 0): ?>
                                     <span class="status-badge status-error"><?php echo $type['error_count']; ?> Error</span>
-                                <?php endif; ?>
-                                <?php if ($type['maintenance_count'] > 0): ?>
-                                    <span class="status-badge status-maintenance"><?php echo $type['maintenance_count']; ?> Maintenance</span>
                                 <?php endif; ?>
                             </div>
                         </div>

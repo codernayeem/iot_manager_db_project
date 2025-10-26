@@ -123,9 +123,9 @@ $currentConfig = $database->getConfig();
                 
                 <!-- Tables Status -->
                 <div class="bg-gray-50 rounded p-3 text-sm">
-                    <h3 class="font-semibold text-gray-700 mb-2">Tables <span id="tables-status" class="table-count">(0/6)</span></h3>
+                    <h3 class="font-semibold text-gray-700 mb-2">Tables <span id="tables-status" class="table-count">(0/7)</span></h3>
                     <div class="space-y-1 text-xs">
-                        <?php foreach (['users', 'device_types', 'devices', 'locations', 'deployments', 'device_logs'] as $table): ?>
+                        <?php foreach (['users', 'device_types', 'devices', 'locations', 'deployments', 'device_logs', 'alerts'] as $table): ?>
                             <div class="flex justify-between">
                                 <span data-table="<?php echo $table; ?>" 
                                       class="cursor-pointer underline"
@@ -148,7 +148,7 @@ $currentConfig = $database->getConfig();
                 <div class="bg-gray-50 rounded p-3 text-sm">
                     <h3 class="font-semibold text-gray-700 mb-2">Views <span id="views-status" class="view-count">(0/2)</span></h3>
                     <div class="space-y-1 text-xs">
-                        <?php foreach (['v_active_devices', 'v_device_locations'] as $view): ?>
+                        <?php foreach (['v_device_deployment_summary', 'v_unresolved_critical_logs'] as $view): ?>
                             <div class="flex justify-between">
                                 <span data-sql-type="view" 
                                       data-sql-name="<?php echo $view; ?>"
@@ -200,7 +200,7 @@ $currentConfig = $database->getConfig();
                             </span>
                             <span id="trigger-count" class="trigger-count status-missing"
                                   title="CREATE TRIGGER trg_...">
-                                0/2
+                                0/5
                             </span>
                         </div>
                     </div>
