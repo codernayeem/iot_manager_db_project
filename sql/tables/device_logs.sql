@@ -1,4 +1,4 @@
--- Device Logs Table with Partitioning concept and Full-text search
+-- Device Logs Table with Full-text search
 -- Features: Primary Key, Auto Increment, Foreign Keys, ENUM, Full-text Index, Multiple Indexes
 CREATE TABLE IF NOT EXISTS device_logs (
     log_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS device_logs (
     resolved_by INT NULL,
     resolved_at TIMESTAMP NULL,
     resolution_notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (d_id) REFERENCES devices(d_id) ON DELETE CASCADE ON UPDATE CASCADE,
     FOREIGN KEY (resolved_by) REFERENCES users(user_id) ON DELETE SET NULL ON UPDATE CASCADE,
     INDEX idx_device_logs (d_id, log_time),

@@ -1,31 +1,31 @@
 -- Demo Data for Deployments Table
--- Features: INSERT IGNORE, Junction Table Data, Boolean Values
+-- Features: Composite Primary Key (d_id, loc_id)
 
-INSERT IGNORE INTO deployments (d_id, loc_id, deployed_by, deployment_notes, is_active) VALUES 
+INSERT IGNORE INTO deployments (d_id, loc_id, deployed_at) VALUES 
 -- Headquarters deployments (loc_id: 1)
-(1, 1, 1, 'Initial deployment - main lobby temperature monitoring', 1),
-(2, 1, 1, 'Initial deployment - server room humidity control', 1),
-(3, 1, 1, 'Initial deployment - main entrance security', 1),
-(4, 1, 1, 'Initial deployment - reception area surveillance', 1),
-(5, 1, 1, 'Initial deployment - office air quality monitoring', 1),
+(1, 1, '2024-01-16 09:00:00'),
+(2, 1, '2024-02-02 10:30:00'),
+(3, 1, '2024-01-21 14:15:00'),
+(4, 1, '2024-03-02 08:45:00'),
+(5, 1, '2024-02-16 11:20:00'),
 
 -- Warehouse A deployments (loc_id: 2)
-(6, 2, 1, 'Initial deployment - warehouse climate control', 1),
-(7, 2, 1, 'Initial deployment - hydraulic system monitoring', 1),
-(8, 2, 1, 'Initial deployment - conveyor system health monitoring', 1),
-(9, 2, 1, 'Initial deployment - loading dock security', 1),
+(6, 2, '2024-01-11 07:30:00'),
+(7, 2, '2024-03-16 13:00:00'),
+(8, 2, '2024-02-21 09:45:00'),
+(9, 2, '2024-01-26 15:30:00'),
 
 -- Branch Office deployments (loc_id: 3)
-(10, 3, 1, 'Initial deployment - conference room climate control', 1),
-(11, 3, 1, 'Initial deployment - automatic lighting system', 1),
-(12, 3, 1, 'Initial deployment - office access control', 1),
+(10, 3, '2024-03-11 10:00:00'),
+(11, 3, '2024-02-26 14:45:00'),
+(12, 3, '2024-01-31 12:15:00'),
 
 -- Manufacturing Plant deployments (loc_id: 4)
-(13, 4, 1, 'Initial deployment - production line temperature monitoring', 1),
-(14, 4, 1, 'Initial deployment - machine health monitoring', 1),
-(15, 4, 1, 'Initial deployment - steam system pressure monitoring', 1),
+(13, 4, '2024-02-06 08:00:00'),
+(14, 4, '2024-03-21 11:30:00'),
+(15, 4, '2024-01-13 09:15:00'),
 
 -- Data Center deployments (loc_id: 5)
-(16, 5, 1, 'Initial deployment - critical humidity monitoring', 1),
-(17, 5, 1, 'Initial deployment - cooling system temperature monitoring', 1),
-(18, 5, 1, 'Initial deployment - air quality monitoring system', 1);
+(16, 5, '2024-02-11 07:00:00'),
+(17, 5, '2024-01-06 08:30:00'),
+(18, 5, '2024-03-26 10:45:00');

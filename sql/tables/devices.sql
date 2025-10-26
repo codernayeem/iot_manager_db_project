@@ -1,4 +1,4 @@
--- Devices Table with Foreign Key constraints and CHECK constraint
+-- Devices Table with Foreign Key constraints
 -- Features: Primary Key, Auto Increment, Foreign Keys, ENUM, Indexes, Timestamps
 CREATE TABLE IF NOT EXISTS devices (
     d_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS devices (
     t_id INT NOT NULL,
     user_id INT NOT NULL,
     serial_number VARCHAR(100) UNIQUE NOT NULL,
-    status ENUM('active', 'inactive', 'maintenance', 'error') DEFAULT 'inactive',
+    status ENUM('error', 'warning', 'info') DEFAULT 'info',
     purchase_date DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
