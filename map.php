@@ -38,9 +38,8 @@ try {
                 l.longitude,
                 l.created_at,
                 COUNT(DISTINCT d.d_id) as total_devices,
-                COUNT(DISTINCT CASE WHEN d.status = 'info' THEN d.d_id END) as active_devices,
-                COUNT(DISTINCT CASE WHEN d.status = 'warning' THEN d.d_id END) as maintenance_devices,
-                COUNT(DISTINCT CASE WHEN d.status = 'error' THEN d.d_id END) as inactive_devices,
+                COUNT(DISTINCT CASE WHEN d.status = 'active' THEN d.d_id END) as active_devices,
+                COUNT(DISTINCT CASE WHEN d.status = 'inactive' THEN d.d_id END) as inactive_devices,
                 COUNT(DISTINCT CASE WHEN dl.log_type = 'info' THEN d.d_id END) as info_devices,
                 COUNT(DISTINCT CASE WHEN dl.log_type = 'warning' THEN d.d_id END) as warning_devices,
                 COUNT(DISTINCT CASE WHEN dl.log_type = 'error' THEN d.d_id END) as error_devices
@@ -62,7 +61,7 @@ try {
             SELECT 
                 COUNT(DISTINCT l.loc_id) as total_locations,
                 COUNT(DISTINCT d.d_id) as total_devices,
-                COUNT(DISTINCT CASE WHEN d.status = 'info' THEN d.d_id END) as active_devices
+                COUNT(DISTINCT CASE WHEN d.status = 'active' THEN d.d_id END) as active_devices
             FROM locations l
             LEFT JOIN deployments dep ON l.loc_id = dep.loc_id
             LEFT JOIN devices d ON dep.d_id = d.d_id
@@ -320,11 +319,8 @@ $locationsJson = json_encode($locations);
                                         <span style="color: #10b981;">
                                             <i class="fas fa-check-circle"></i> ${location.active_devices || 0} active
                                         </span>
-                                        <span style="color: #f59e0b;">
-                                            <i class="fas fa-exclamation-triangle"></i> ${location.maintenance_devices || 0} warning
-                                        </span>
-                                        <span style="color: #ef4444;">
-                                            <i class="fas fa-times-circle"></i> ${location.inactive_devices || 0} error
+                                        <span style="color: #6b7280;">
+                                            <i class="fas fa-times-circle"></i> ${location.inactive_devices || 0} inactive
                                         </span>
                                     </div>
                                     <div style="font-size: 11px; color: #666; margin-top: 6px; border-top: 1px solid #f3f4f6; padding-top: 6px;">

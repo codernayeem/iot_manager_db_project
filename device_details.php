@@ -253,9 +253,8 @@ $healthBgClass = $device['health_score'] >= 80 ? 'bg-green-100' : ($device['heal
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        .status-info { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
-        .status-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
-        .status-error { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+        .status-active { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .status-inactive { background: linear-gradient(135deg, #6b7280, #4b5563); color: white; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -384,9 +383,8 @@ $healthBgClass = $device['health_score'] >= 80 ? 'bg-green-100' : ($device['heal
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
                             <select name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
-                                <option value="info" <?php echo $device['status'] === 'info' ? 'selected' : ''; ?>>Info - Normal Operation</option>
-                                <option value="warning" <?php echo $device['status'] === 'warning' ? 'selected' : ''; ?>>Warning - Needs Attention</option>
-                                <option value="error" <?php echo $device['status'] === 'error' ? 'selected' : ''; ?>>Error - Critical Issue</option>
+                                <option value="active" <?php echo $device['status'] === 'active' ? 'selected' : ''; ?>>Active - Operational</option>
+                                <option value="inactive" <?php echo $device['status'] === 'inactive' ? 'selected' : ''; ?>>Inactive - Not Operational</option>
                             </select>
                         </div>
                         

@@ -39,6 +39,7 @@ $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $typeFilter = isset($_GET['type']) ? (int)$_GET['type'] : 0;
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 $locationFilter = isset($_GET['location']) ? (int)$_GET['location'] : 0;
+$ownerFilter = isset($_GET['owner']) ? (int)$_GET['owner'] : 0;
 $sortBy = isset($_GET['sort']) ? $_GET['sort'] : 'updated_at';
 $sortOrder = isset($_GET['order']) ? $_GET['order'] : 'DESC';
 
@@ -65,6 +66,11 @@ if (!empty($statusFilter)) {
 if ($locationFilter > 0) {
     $whereConditions[] = "EXISTS (SELECT 1 FROM deployments dep_filter WHERE dep_filter.d_id = d.d_id AND dep_filter.loc_id = ?)";
     $params[] = $locationFilter;
+}
+
+if ($ownerFilter > 0) {
+    $whereConditions[] = "d.user_id = ?";
+    $params[] = $ownerFilter;
 }
 
 $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereConditions) : "";
@@ -127,6 +133,12 @@ $typesQuery = "SELECT t_id, t_name FROM device_types ORDER BY t_name";
 $typesStmt = $conn->prepare($typesQuery);
 $typesStmt->execute();
 $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get users for owner filter dropdown
+$usersQuery = "SELECT user_id, CONCAT(f_name, ' ', l_name) as full_name, email FROM users ORDER BY f_name, l_name";
+$usersStmt = $conn->prepare($usersQuery);
+$usersStmt->execute();
+$users = $usersStmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
 
 <!DOCTYPE html>
@@ -185,9 +197,8 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
             font-weight: 600;
         }
         
-        .status-info { background-color: #dbeafe; color: #1e40af; }
-        .status-warning { background-color: #fef3c7; color: #d97706; }
-        .status-error { background-color: #fee2e2; color: #dc2626; }
+        .status-active { background-color: #d1fae5; color: #065f46; }
+        .status-inactive { background-color: #e5e7eb; color: #374151; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -230,7 +241,7 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
         
         <!-- Search and Filter Form -->
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
                 <div>
                     <label for="search" class="block text-sm font-medium text-gray-700 mb-2">Search</label>
                     <input type="text" 
@@ -257,9 +268,8 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                     <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Status</label>
                     <select id="status" name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
                         <option value="">All Status</option>
-                        <option value="info" <?php echo $statusFilter === 'info' ? 'selected' : ''; ?>>Info</option>
-                        <option value="warning" <?php echo $statusFilter === 'warning' ? 'selected' : ''; ?>>Warning</option>
-                        <option value="error" <?php echo $statusFilter === 'error' ? 'selected' : ''; ?>>Error</option>
+                        <option value="active" <?php echo $statusFilter === 'active' ? 'selected' : ''; ?>>Active</option>
+                        <option value="inactive" <?php echo $statusFilter === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
                     </select>
                 </div>
                 
@@ -275,6 +285,18 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                         foreach ($locations as $location): ?>
                             <option value="<?php echo $location['loc_id']; ?>" <?php echo $locationFilter == $location['loc_id'] ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($location['loc_name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="owner" class="block text-sm font-medium text-gray-700 mb-2">Owner</label>
+                    <select id="owner" name="owner" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Owners</option>
+                        <?php foreach ($users as $user): ?>
+                            <option value="<?php echo $user['user_id']; ?>" <?php echo $ownerFilter == $user['user_id'] ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($user['full_name']); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -326,7 +348,7 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
         <div class="flex justify-between items-center mb-6">
             <div class="text-gray-600">
                 Showing <?php echo count($devices); ?> of <?php echo $totalDevices; ?> devices
-                <?php if (!empty($search) || $typeFilter || !empty($statusFilter) || $locationFilter): ?>
+                <?php if (!empty($search) || $typeFilter || !empty($statusFilter) || $locationFilter || $ownerFilter): ?>
                     (filtered)
                 <?php endif; ?>
             </div>

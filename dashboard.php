@@ -215,13 +215,10 @@ function renderModuleCard($data) {
         <div class="sticky-header bg-white rounded-lg shadow-sm p-6 mb-6">
             <div class="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-800 mb-2">
+                    <h3 class="text-xl font-bold text-gray-800 mb-2">
                         <i class="fas fa-chart-line text-blue-600 mr-2"></i>
                         SQL Operations Dashboard
-                    </h1>
-                    <p class="text-gray-600">
-                        Comprehensive showcase of SQL features: JOINs, Subqueries, Set Operations, Views, Functions, Procedures & More
-                    </p>
+                    </h3>
                 </div>
                 <div class="flex gap-2">
                     <a href="index.php" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm transition-colors">

@@ -28,8 +28,7 @@ $userQuery = "
         u.*,
         COUNT(DISTINCT d.d_id) as device_count,
         COUNT(DISTINCT CASE WHEN d.status = 'active' THEN d.d_id END) as active_devices,
-        COUNT(DISTINCT CASE WHEN d.status = 'error' THEN d.d_id END) as error_devices,
-        COUNT(DISTINCT CASE WHEN d.status = 'maintenance' THEN d.d_id END) as maintenance_devices,
+        COUNT(DISTINCT CASE WHEN d.status = 'inactive' THEN d.d_id END) as inactive_devices,
         (SELECT COUNT(*) FROM device_logs dl 
          INNER JOIN devices d2 ON dl.d_id = d2.d_id 
          WHERE d2.user_id = u.user_id) as total_logs_for_devices,
@@ -287,7 +286,7 @@ $deployments = $deploymentsStmt->fetchAll(PDO::FETCH_ASSOC);
                     </table>
                 </div>
                 <div class="mt-4">
-                    <a href="devices.php?search=<?php echo urlencode($user['email']); ?>" class="text-blue-600 hover:text-blue-800">
+                    <a href="devices.php?owner=<?php echo $user['user_id']; ?>" class="text-blue-600 hover:text-blue-800">
                         View all devices <i class="fas fa-arrow-right ml-1"></i>
                     </a>
                 </div>

@@ -18,7 +18,7 @@ sql/
 
 2. **device_types** (t_id, t_name, desc)├── install_complete.sql         # Master installation script
 
-3. **devices** (d_id, d_name, t_id, user_id, serial_number, status ENUM('error', 'warning', 'info'), purchase_date, created_at, updated_at)├── tables/                      # Table definitions
+3. **devices** (d_id, d_name, t_id, user_id, serial_number, status ENUM('active', 'inactive'), purchase_date, created_at, updated_at)├── tables/                      # Table definitions
 
 4. **locations** (loc_id, loc_name, address, latitude, longitude, created_at, updated_at)│   ├── users.sql
 

@@ -358,9 +358,9 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                                            title="Edit User">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <a href="devices.php?search=<?php echo urlencode($user['email']); ?>" 
+                                        <a href="devices.php?owner=<?php echo $user['user_id']; ?>" 
                                            class="text-purple-600 hover:text-purple-900"
-                                           title="View Devices">
+                                           title="View User's Devices">
                                             <i class="fas fa-microchip"></i>
                                         </a>
                                         <?php if ($user['user_id'] != $_SESSION['user_id']): ?>

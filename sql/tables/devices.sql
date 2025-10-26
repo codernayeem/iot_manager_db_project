@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS devices (
     t_id INT NOT NULL,
     user_id INT NOT NULL,
     serial_number VARCHAR(100) UNIQUE NOT NULL,
-    status ENUM('error', 'warning', 'info') DEFAULT 'info',
+    status ENUM('active', 'inactive') DEFAULT 'inactive',
     purchase_date DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

@@ -21,7 +21,7 @@ Complete restructuring of the database schema and PL/SQL implementation accordin
 
 3. **devices** (d_id, d_name, t_id, user_id, serial_number, status, purchase_date, created_at, updated_at)
    - Primary Key: d_id (AUTO_INCREMENT)
-   - Status: ENUM('error', 'warning', 'info') - **CHANGED from previous**
+   - Status: ENUM('active', 'inactive') - Device operational status
    - Unique: serial_number
    - Foreign Keys: t_id → device_types, user_id → users
    - Timestamps: Auto-managed by trigger
@@ -258,7 +258,7 @@ SOURCE sql/install_complete.sql;
 
 - [x] Exact schema match: users, device_types, devices, locations, deployments, device_logs, alerts
 - [x] device_types has `desc` field
-- [x] devices.status = ENUM('error', 'warning', 'info')
+- [x] devices.status = ENUM('active', 'inactive') - Device operational status
 - [x] deployments has composite PK (d_id, loc_id)
 - [x] alerts table created with proper FKs
 - [x] 2 Views created (meaningful, complex queries)

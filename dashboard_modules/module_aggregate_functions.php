@@ -16,9 +16,8 @@ $sql = "SELECT
             AVG(YEAR(CURDATE()) - YEAR(d.purchase_date)) AS avg_age_years,
             MIN(d.purchase_date) AS oldest_purchase,
             MAX(d.purchase_date) AS newest_purchase,
-            SUM(CASE WHEN d.status = 'error' THEN 1 ELSE 0 END) AS error_count,
-            SUM(CASE WHEN d.status = 'warning' THEN 1 ELSE 0 END) AS warning_count,
-            SUM(CASE WHEN d.status = 'info' THEN 1 ELSE 0 END) AS healthy_count
+            SUM(CASE WHEN d.status = 'active' THEN 1 ELSE 0 END) AS active_count,
+            SUM(CASE WHEN d.status = 'inactive' THEN 1 ELSE 0 END) AS inactive_count
         FROM device_types dt
         LEFT JOIN devices d ON dt.t_id = d.t_id
         GROUP BY dt.t_id, dt.t_name

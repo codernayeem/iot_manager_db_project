@@ -247,9 +247,8 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                             <select id="status" 
                                     name="status"
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="info">Info - Normal Operation</option>
-                                <option value="warning">Warning - Needs Attention</option>
-                                <option value="error">Error - Critical Issue</option>
+                                <option value="inactive">Inactive - Not yet deployed</option>
+                                <option value="active">Active - Currently operational</option>
                             </select>
                         </div>
                         
@@ -312,8 +311,8 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                                     1. Check serial uniqueness:<br>
                                     SELECT EXISTS(SELECT 1 FROM devices WHERE serial_number = ?)<br><br>
                                     2. Insert device:<br>
-                                    INSERT INTO devices (d_name, t_id, user_id, serial_number, status, purchase_date, warranty_expiry)<br>
-                                    VALUES (?, ?, ?, ?, ?, ?)<br><br>
+                                    INSERT INTO devices (d_name, t_id, user_id, serial_number, status, purchase_date)<br>
+                                    VALUES (?, ?, ?, ?, ?)<br><br>
                                     3. Insert deployments:<br>
                                     INSERT INTO deployments (d_id, loc_id)<br>
                                     VALUES (?, ?)<br><br>
@@ -347,7 +346,7 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                     <div>
                         <h4 class="font-semibold text-gray-800 mb-2">Optional Information</h4>
                         <ul class="space-y-1">
-                            <li><i class="fas fa-info text-blue-600 mr-2"></i>Purchase & warranty dates for tracking</li>
+                            <li><i class="fas fa-info text-blue-600 mr-2"></i>Purchase date for tracking</li>
                             <li><i class="fas fa-info text-blue-600 mr-2"></i>Multiple deployment locations</li>
                             <li><i class="fas fa-info text-blue-600 mr-2"></i>Deployment notes for documentation</li>
                         </ul>

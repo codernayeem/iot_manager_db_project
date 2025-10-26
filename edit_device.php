@@ -162,9 +162,8 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
             transition: all 0.3s ease;
         }
         
-        .status-info { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
-        .status-warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
-        .status-error { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+        .status-active { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .status-inactive { background: linear-gradient(135deg, #6b7280, #4b5563); color: white; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -272,14 +271,11 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
                                     name="status" 
                                     onchange="updateStatusPreview()"
                                     class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="info" <?php echo $device['status'] === 'info' ? 'selected' : ''; ?>>
-                                    Info - Device operating normally
+                                <option value="active" <?php echo $device['status'] === 'active' ? 'selected' : ''; ?>>
+                                    Active - Device is operational
                                 </option>
-                                <option value="warning" <?php echo $device['status'] === 'warning' ? 'selected' : ''; ?>>
-                                    Warning - Device needs attention
-                                </option>
-                                <option value="error" <?php echo $device['status'] === 'error' ? 'selected' : ''; ?>>
-                                    Error - Device has critical issues
+                                <option value="inactive" <?php echo $device['status'] === 'inactive' ? 'selected' : ''; ?>>
+                                    Inactive - Device is not operational
                                 </option>
                             </select>
                             <div id="status-preview" class="status-preview status-<?php echo $device['status']; ?>">
@@ -290,10 +286,10 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
                 </div>
             </div>
             
-            <!-- Dates and Warranty Section -->
+            <!-- Dates Section -->
             <div class="form-section bg-white rounded-lg shadow-md p-6">
                 <h3 class="text-xl font-bold text-gray-800 mb-6">
-                    <i class="fas fa-calendar mr-2 text-green-600"></i>Dates and Warranty
+                    <i class="fas fa-calendar mr-2 text-green-600"></i>Dates
                 </h3>
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -308,21 +304,9 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="text-xs text-gray-500 mt-1">When the device was purchased</p>
                     </div>
-                    
-                    <div>
-                        <label for="warranty_expiry" class="block text-sm font-medium text-gray-700 mb-2">
-                            Warranty Expiry
-                        </label>
-                        <input type="date" 
-                               id="purchase_date" 
-                               name="purchase_date"
-                               value="<?php echo $device['purchase_date']; ?>"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="text-xs text-gray-500 mt-1">When the device was purchased</p>
-                    </div>
                 </div>
                 
-                <!-- Warranty Status Display -->
+                <!-- Status Display -->
                 <div class="mt-4 p-4 bg-gray-50 rounded-lg">
                     <h4 class="text-sm font-medium text-gray-700 mb-2">Current Status</h4>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -404,10 +388,8 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
                 <div>
                     <h4 class="font-semibold text-gray-800 mb-2">Device Status Guidelines</h4>
                     <ul class="space-y-1">
-                        <li><strong>Active:</strong> Device is working normally</li>
-                        <li><strong>Inactive:</strong> Device is powered off or unused</li>
-                        <li><strong>Maintenance:</strong> Device is being serviced</li>
-                        <li><strong>Error:</strong> Device has malfunctions</li>
+                        <li><strong>Active:</strong> Device is operational and in use</li>
+                        <li><strong>Inactive:</strong> Device is not currently operational</li>
                     </ul>
                 </div>
                 
@@ -434,19 +416,6 @@ $currentDeployments = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
             statusPreview.className = 'status-preview status-' + selectedValue;
             statusPreview.textContent = selectedValue.charAt(0).toUpperCase() + selectedValue.slice(1);
         }
-        
-        // Set warranty reminder based on expiry date
-        document.getElementById('warranty_expiry').addEventListener('change', function() {
-            const warrantyDate = new Date(this.value);
-            const today = new Date();
-            const diffTime = warrantyDate - today;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            // Remove any existing warnings
-            const existingWarning = document.getElementById('warranty-warning');
-            if (existingWarning) {
-                existingWarning.remove();
-            }
     </script>
     
 </div>

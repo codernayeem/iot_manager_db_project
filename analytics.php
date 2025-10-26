@@ -529,9 +529,7 @@ foreach ($dailyData as $date => $data) {
                                 </td>
                                 <td class="px-4 py-2 whitespace-nowrap">
                                     <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
-                                        <?php echo $device['status'] === 'active' ? 'bg-green-100 text-green-800' : 
-                                                   ($device['status'] === 'maintenance' ? 'bg-yellow-100 text-yellow-800' : 
-                                                    ($device['status'] === 'error' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800')); ?>">
+                                        <?php echo $device['status'] === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'; ?>">
                                         <?php echo ucfirst($device['status']); ?>
                                     </span>
                                 </td>
