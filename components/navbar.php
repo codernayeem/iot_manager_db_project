@@ -62,10 +62,10 @@
                 <div class="sidebar-tooltip">Activity Logs</div>
             </a>
             
-            <a href="analytics.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
-                <i class="fas fa-chart-line text-lg w-6"></i>
-                <span class="sidebar-text ml-3 font-medium">Analytics</span>
-                <div class="sidebar-tooltip">Analytics & Reports</div>
+            <a href="alerts.php" class="sidebar-link flex items-center p-3 text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-all duration-200 group">
+                <i class="fas fa-bell text-lg w-6"></i>
+                <span class="sidebar-text ml-3 font-medium">Alerts</span>
+                <div class="sidebar-tooltip">System Alerts</div>
             </a>
         </nav>
     </div>

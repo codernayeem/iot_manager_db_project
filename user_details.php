@@ -39,9 +39,11 @@ $userQuery = "
          INNER JOIN devices d3 ON dl.d_id = d3.d_id 
          WHERE d3.user_id = u.user_id AND dl.log_type = 'error' AND dl.resolved_by IS NULL) as unresolved_errors,
         (SELECT COUNT(*) FROM deployments dep
-         WHERE dep.deployed_by = u.user_id) as deployments_made,
+         INNER JOIN devices d4 ON dep.d_id = d4.d_id
+         WHERE d4.user_id = u.user_id) as deployments_made,
         (SELECT MAX(dep.deployed_at) FROM deployments dep
-         WHERE dep.deployed_by = u.user_id) as last_deployment
+         INNER JOIN devices d5 ON dep.d_id = d5.d_id
+         WHERE d5.user_id = u.user_id) as last_deployment
     FROM users u
     LEFT JOIN devices d ON u.user_id = d.user_id
     WHERE u.user_id = ?
@@ -104,18 +106,16 @@ $resolutions = $resolutionsStmt->fetchAll(PDO::FETCH_ASSOC);
 // Get user's deployments
 $deploymentsQuery = "
     SELECT 
-        dep.deployment_id,
         dep.deployed_at,
         d.d_name,
         dt.t_name as device_type,
         l.loc_name,
-        l.address,
-        dep.is_active
+        l.address
     FROM deployments dep
     INNER JOIN devices d ON dep.d_id = d.d_id
     INNER JOIN device_types dt ON d.t_id = dt.t_id
     INNER JOIN locations l ON dep.loc_id = l.loc_id
-    WHERE dep.deployed_by = ?
+    WHERE d.user_id = ?
     ORDER BY dep.deployed_at DESC
     LIMIT 10
 ";
@@ -347,11 +347,6 @@ $deployments = $deploymentsStmt->fetchAll(PDO::FETCH_ASSOC);
                                     <div class="flex items-center mb-2">
                                         <span class="text-sm font-medium text-gray-900"><?php echo htmlspecialchars($deployment['d_name']); ?></span>
                                         <span class="text-xs text-gray-500 ml-2">(<?php echo htmlspecialchars($deployment['device_type']); ?>)</span>
-                                        <?php if ($deployment['is_active']): ?>
-                                            <span class="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded">Active</span>
-                                        <?php else: ?>
-                                            <span class="ml-2 px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded">Inactive</span>
-                                        <?php endif; ?>
                                     </div>
                                     <p class="text-sm text-gray-700">
                                         <i class="fas fa-map-marker-alt text-gray-400"></i> 

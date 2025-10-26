@@ -70,7 +70,7 @@ $trendsQuery = "
         FROM device_logs dl
         INNER JOIN devices d ON dl.d_id = d.d_id
         INNER JOIN device_types dt ON d.t_id = dt.t_id
-        INNER JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+        INNER JOIN deployments dep ON d.d_id = dep.d_id
         INNER JOIN locations l ON dep.loc_id = l.loc_id
         WHERE dl.log_time >= DATE_SUB(NOW(), INTERVAL ? DAY)
         $whereClause
@@ -128,7 +128,7 @@ $resolversQuery = "
     INNER JOIN device_logs dl ON u.user_id = dl.resolved_by
     INNER JOIN devices d ON dl.d_id = d.d_id
     INNER JOIN device_types dt ON d.t_id = dt.t_id
-    INNER JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+    INNER JOIN deployments dep ON d.d_id = dep.d_id
     WHERE dl.resolved_at IS NOT NULL
     AND dl.log_time >= DATE_SUB(NOW(), INTERVAL ? DAY)
     $whereClause
@@ -167,7 +167,7 @@ $devicePerformanceQuery = "
         RANK() OVER (ORDER BY COUNT(CASE WHEN dl.log_type = 'error' THEN 1 END) DESC) as error_rank
     FROM devices d
     INNER JOIN device_types dt ON d.t_id = dt.t_id
-    INNER JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+    INNER JOIN deployments dep ON d.d_id = dep.d_id
     INNER JOIN locations l ON dep.loc_id = l.loc_id
     LEFT JOIN device_logs dl ON d.d_id = dl.d_id 
         AND dl.log_time >= DATE_SUB(NOW(), INTERVAL ? DAY)

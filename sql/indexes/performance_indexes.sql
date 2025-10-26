@@ -13,8 +13,8 @@ CREATE INDEX IF NOT EXISTS idx_device_logs_resolved ON device_logs(resolved_by, 
 -- Severity and type index for filtering
 CREATE INDEX IF NOT EXISTS idx_device_logs_severity ON device_logs(severity_level, log_type);
 
--- Active deployments index
-CREATE INDEX IF NOT EXISTS idx_deployments_active ON deployments(is_active, d_id, loc_id);
+-- Deployments composite index
+CREATE INDEX IF NOT EXISTS idx_deployments_composite ON deployments(d_id, loc_id, deployed_at);
 
 -- Device status and type index
 CREATE INDEX IF NOT EXISTS idx_devices_status_type ON devices(status, t_id);

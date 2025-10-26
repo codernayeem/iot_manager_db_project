@@ -25,7 +25,6 @@ if ($_POST) {
     $status = $_POST['status'];
     $purchaseDate = $_POST['purchase_date'];
     $locations = isset($_POST['locations']) ? $_POST['locations'] : [];
-    $deploymentNotes = trim($_POST['deployment_notes']);
     
     if (!empty($deviceName) && $deviceType > 0 && !empty($serialNumber)) {
         try {
@@ -63,11 +62,11 @@ if ($_POST) {
             
             // SQL Feature: Bulk INSERT for deployments if locations selected
             if (!empty($locations)) {
-                $deploymentSql = "INSERT INTO deployments (d_id, loc_id, deployed_by, deployment_notes) VALUES (?, ?, ?, ?)";
+                $deploymentSql = "INSERT INTO deployments (d_id, loc_id) VALUES (?, ?)";
                 $deploymentStmt = $conn->prepare($deploymentSql);
                 
                 foreach ($locations as $locationId) {
-                    $deploymentStmt->execute([$deviceId, (int)$locationId, $_SESSION['user_id'], $deploymentNotes]);
+                    $deploymentStmt->execute([$deviceId, (int)$locationId]);
                 }
             }
             
@@ -92,7 +91,7 @@ if ($_POST) {
 }
 
 // Get device types for dropdown
-$typesQuery = "SELECT t_id, t_name FROM device_types ORDER BY t_name";
+$typesQuery = "SELECT t_id, t_name, `desc` FROM device_types ORDER BY t_name";
 $typesStmt = $conn->prepare($typesQuery);
 $typesStmt->execute();
 $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -220,7 +219,7 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                                 <option value="">Select device type</option>
                                 <?php foreach ($deviceTypes as $type): ?>
-                                    <option value="<?php echo $type['t_id']; ?>" title="<?php echo htmlspecialchars($type['description']); ?>">
+                                    <option value="<?php echo $type['t_id']; ?>" title="<?php echo htmlspecialchars($type['desc'] ?? ''); ?>">
                                         <?php echo htmlspecialchars($type['t_name']); ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -290,18 +289,6 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                             </div>
                             <p class="text-xs text-gray-500 mt-1">Select one or more locations where this device will be deployed</p>
                         </div>
-                        
-                        <!-- Deployment Notes -->
-                        <div class="md:col-span-2">
-                            <label for="deployment_notes" class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-sticky-note mr-2"></i>Deployment Notes
-                            </label>
-                            <textarea id="deployment_notes" 
-                                      name="deployment_notes" 
-                                      rows="3"
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                      placeholder="Optional notes about the device deployment..."></textarea>
-                        </div>
                     </div>
                     
                     <!-- Form Actions -->
@@ -328,8 +315,8 @@ $locations = $locationsStmt->fetchAll(PDO::FETCH_ASSOC);
                                     INSERT INTO devices (d_name, t_id, user_id, serial_number, status, purchase_date, warranty_expiry)<br>
                                     VALUES (?, ?, ?, ?, ?, ?)<br><br>
                                     3. Insert deployments:<br>
-                                    INSERT INTO deployments (d_id, loc_id, deployed_by, deployment_notes)<br>
-                                    VALUES (?, ?, ?, ?)<br><br>
+                                    INSERT INTO deployments (d_id, loc_id)<br>
+                                    VALUES (?, ?)<br><br>
                                     4. Insert initial log:<br>
                                     INSERT INTO device_logs (d_id, log_type, message, severity_level)<br>
                                     VALUES (?, 'info', ?, 1)<br><br>

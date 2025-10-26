@@ -8,8 +8,22 @@ if (!isset($_SESSION['user_id'])) {
 require_once 'config/database.php';
 
 /**
- * SQL Features Used: Complex JOINs, Pagination, Search with LIKE, ORDER BY
- * Device management with advanced filtering and search capabilities
+ * Device Management Page
+ * SQL Features Used:
+ * - INNER JOIN (devices with device_types and users)
+ * - LEFT JOIN (devices with deployments and locations)
+ * - Scalar subqueries in SELECT clause
+ * - User-defined function calls (fn_get_device_health_score)
+ * - GROUP_CONCAT for string aggregation
+ * - COUNT DISTINCT for counting unique values
+ * - EXISTS subquery for filtering
+ * - CASE expressions for status categorization
+ * - Dynamic WHERE clause with multiple conditions
+ * - LIKE pattern matching
+ * - GROUP BY with aggregate functions
+ * - ORDER BY with dynamic sorting
+ * - LIMIT and OFFSET for pagination
+ * - Prepared statements with variable parameters
  */
 
 $database = new Database();
@@ -202,9 +216,13 @@ $deviceTypes = $typesStmt->fetchAll(PDO::FETCH_ASSOC);
                 <div class="ml-3">
                     <p class="text-sm text-blue-700">
                         <strong>SQL Features Used:</strong> 
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">2 Functions (fn_get_device_health_score, fn_get_alert_summary)</span>
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex JOINs (INNER, LEFT)</span>
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">GROUP BY, Subqueries, Pagination</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">User-defined FUNCTION (fn_get_device_health_score)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">INNER JOIN & LEFT JOIN</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Scalar subqueries</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">GROUP_CONCAT</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">EXISTS subquery</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">COUNT DISTINCT</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex filtering & pagination</span>
                     </p>
                 </div>
             </div>

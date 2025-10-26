@@ -42,14 +42,16 @@ try {
     $checkLogsStmt->execute([$user_id]);
     $logResult = $checkLogsStmt->fetch(PDO::FETCH_ASSOC);
     
-    // Check deployments (foreign key constraint will prevent deletion if exists)
-    $checkDeploymentsQuery = "SELECT COUNT(*) as deployment_count FROM deployments WHERE deployed_by = ?";
+    // Check if user owns devices that have deployments
+    $checkDeploymentsQuery = "SELECT COUNT(*) as deployment_count FROM deployments dep
+                               INNER JOIN devices d ON dep.d_id = d.d_id
+                               WHERE d.user_id = ?";
     $checkDepStmt = $conn->prepare($checkDeploymentsQuery);
     $checkDepStmt->execute([$user_id]);
     $depResult = $checkDepStmt->fetch(PDO::FETCH_ASSOC);
     
     if ($depResult['deployment_count'] > 0) {
-        $_SESSION['error_message'] = "Cannot delete user! User has made {$depResult['deployment_count']} deployment(s). Please reassign deployments first.";
+        $_SESSION['error_message'] = "Cannot delete user! User has {$depResult['deployment_count']} deployment(s). Please remove deployments first.";
         header("Location: users.php");
         exit;
     }

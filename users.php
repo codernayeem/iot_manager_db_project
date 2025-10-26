@@ -8,8 +8,19 @@ if (!isset($_SESSION['user_id'])) {
 require_once 'config/database.php';
 
 /**
- * SQL Features Used: Complex JOINs, Subqueries, GROUP BY, Aggregation, Pagination
- * User Management page with comprehensive user statistics
+ * User Management Page
+ * SQL Features Used: 
+ * - LEFT JOIN (users with devices)
+ * - GROUP BY with multiple columns
+ * - COUNT with DISTINCT
+ * - Aggregate functions (COUNT, SUM)
+ * - CASE expressions for conditional counting
+ * - DATE functions (DATE_SUB, NOW, INTERVAL)
+ * - Dynamic WHERE clause construction
+ * - LIKE pattern matching for search
+ * - ORDER BY with dynamic sorting
+ * - LIMIT and OFFSET for pagination
+ * - Prepared statements with parameterized queries
  */
 
 $database = new Database();
@@ -37,7 +48,7 @@ if (!empty($search)) {
 
 $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereConditions) : "";
 
-// SQL Feature: Complex query with aggregation and CASE statements
+// SQL Feature: Complex query with aggregation
 $usersQuery = "
     SELECT 
         u.user_id,
@@ -46,18 +57,7 @@ $usersQuery = "
         u.email,
         u.created_at,
         u.updated_at,
-        COUNT(DISTINCT d.d_id) as device_count,
-        COUNT(DISTINCT CASE WHEN d.status = 'info' THEN d.d_id END) as info_devices,
-        COUNT(DISTINCT CASE WHEN d.status = 'warning' THEN d.d_id END) as warning_devices,
-        COUNT(DISTINCT CASE WHEN d.status = 'error' THEN d.d_id END) as error_devices,
-        MAX(d.updated_at) as last_device_update,
-        (SELECT COUNT(*) FROM device_logs dl 
-         INNER JOIN devices d2 ON dl.d_id = d2.d_id 
-         WHERE d2.user_id = u.user_id) as total_logs_for_devices,
-        (SELECT COUNT(*) FROM device_logs dl 
-         WHERE dl.resolved_by = u.user_id) as logs_resolved,
-        (SELECT COUNT(*) FROM deployments dep
-         WHERE dep.deployed_by = u.user_id) as deployments_made
+        COUNT(DISTINCT d.d_id) as device_count
     FROM users u
     LEFT JOIN devices d ON u.user_id = d.user_id
     $whereClause
@@ -86,9 +86,7 @@ $totalPages = ceil($totalUsers / $limit);
 $statsQuery = "
     SELECT 
         COUNT(*) as total_users,
-        SUM(CASE WHEN u.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) as new_users_30days,
-        (SELECT COUNT(*) FROM devices) as total_devices,
-        (SELECT COUNT(*) FROM device_logs WHERE resolved_by IS NOT NULL) as total_resolved_logs
+        SUM(CASE WHEN u.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) as new_users_30days
     FROM users u
 ";
 
@@ -164,7 +162,7 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                 <h1 class="text-3xl font-bold text-gray-800 mb-2">
                     <i class="fas fa-users mr-3"></i>User Management
                 </h1>
-                <p class="text-gray-600">Manage users and view their activity</p>
+                <p class="text-gray-600">Manage system users and permissions</p>
             </div>
             <a href="register.php" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition">
                 <i class="fas fa-user-plus mr-2"></i>Add New User
@@ -180,8 +178,13 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                 <div class="ml-3">
                     <p class="text-sm text-blue-700">
                         <strong>SQL Features Used:</strong> 
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex aggregation with CASE statements</span>
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex JOINs, Subqueries, GROUP BY, Pagination</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">LEFT JOIN (users → devices)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">GROUP BY with aggregation</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">COUNT DISTINCT</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">CASE expressions</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">DATE_SUB & INTERVAL</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">LIKE pattern matching</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Dynamic sorting & pagination</span>
                     </p>
                 </div>
             </div>
@@ -225,43 +228,6 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                     WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
                 </span>
             </div>
-            
-            <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-microchip text-purple-600 text-2xl"></i>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Total Devices</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['total_devices']; ?></p>
-                        </div>
-                    </div>
-                </div>
-                <span class="tooltip-text">
-                    SQL Query:<br>
-                    SELECT COUNT(*) FROM devices
-                </span>
-            </div>
-            
-            <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-check-circle text-orange-600 text-2xl"></i>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Logs Resolved</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['total_resolved_logs']; ?></p>
-                        </div>
-                    </div>
-                </div>
-                <span class="tooltip-text">
-                    SQL Query:<br>
-                    SELECT COUNT(*) FROM device_logs<br>
-                    WHERE resolved_by IS NOT NULL
-                </span>
-            </div>
         </div>
         
         <!-- Search and Filter Form -->
@@ -299,7 +265,7 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                             (SELECT COUNT(*) FROM device_logs dl<br>
                             WHERE dl.resolved_by = u.user_id) as logs_resolved,<br>
                             (SELECT COUNT(*) FROM deployments dep<br>
-                            WHERE dep.deployed_by = u.user_id) as deployments_made<br>
+                            WHERE dep.d_id = d3.d_id AND d3.user_id = u.user_id) as deployments_made<br>
                             FROM users u<br>
                             LEFT JOIN devices d ON u.user_id = d.user_id<br>
                             GROUP BY u.user_id<br>
@@ -342,7 +308,6 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Devices</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activity</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
@@ -371,45 +336,15 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm">
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title="Total device count">
-                                            <i class="fas fa-database mr-1"></i><?php echo $user['device_count']; ?> Total
+                                            <i class="fas fa-microchip mr-1"></i><?php echo $user['device_count']; ?> Device<?php echo $user['device_count'] != 1 ? 's' : ''; ?>
                                         </span>
-                                        <?php if ($user['info_devices'] > 0): ?>
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 ml-1">
-                                                <?php echo $user['info_devices']; ?> Info
-                                            </span>
-                                        <?php endif; ?>
-                                        <?php if ($user['warning_devices'] > 0): ?>
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 ml-1">
-                                                <?php echo $user['warning_devices']; ?> Warning
-                                            </span>
-                                        <?php endif; ?>
-                                        <?php if ($user['error_devices'] > 0): ?>
-                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 ml-1">
-                                                <?php echo $user['error_devices']; ?> Error
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm space-y-1">
-                                        <div class="text-gray-900">
-                                            <i class="fas fa-list-alt text-gray-400"></i> <?php echo $user['total_logs_for_devices']; ?> logs
-                                        </div>
-                                        <div class="text-green-600">
-                                            <i class="fas fa-check-circle"></i> <?php echo $user['logs_resolved']; ?> resolved
-                                        </div>
-                                        <div class="text-purple-600">
-                                            <i class="fas fa-map-marker-alt"></i> <?php echo $user['deployments_made']; ?> deployments
-                                        </div>
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900"><?php echo date('M j, Y', strtotime($user['created_at'])); ?></div>
-                                    <?php if ($user['last_device_update']): ?>
-                                        <div class="text-xs text-gray-500">
-                                            Last activity: <?php echo date('M j', strtotime($user['last_device_update'])); ?>
-                                        </div>
-                                    <?php endif; ?>
+                                    <div class="text-xs text-gray-500">
+                                        <?php echo date('g:i A', strtotime($user['created_at'])); ?>
+                                    </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <div class="flex space-x-2">

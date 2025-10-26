@@ -1,150 +1,181 @@
 <?php
 session_start();
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit;
-}
-
 require_once 'config/database.php';
 
 /**
- * SQL Features Used: Multiple JOINs, COUNT, GROUP BY, Subqueries, CASE statements
- * Dashboard with comprehensive statistics and data visualization
+ * SQL Operations Dashboard
+ * Showcases various SQL operations, joins, subqueries, views, functions, and procedures
  */
 
+// Check database connection
 $database = new Database();
 $conn = $database->getConnection();
 
-// Initialize default values
-$stats = [
-    'total_devices' => 0,
-    'active_devices' => 0,
-    'error_devices' => 0,
-    'unresolved_errors' => 0,
-    'total_locations' => 0,
-    'active_users' => 0
-];
-$deviceStatusCounts = [];
-$activeDevicesList = [];
-$deviceTypes = [];
-$recentLogs = [];
-$locations = [];
-
-// Check if tables exist before querying
-try {
-    $checkTable = $conn->query("SHOW TABLES LIKE 'devices'");
-    if ($checkTable->rowCount() > 0) {
-        // SQL Feature: Multiple SELECT subqueries with COUNT and WHERE
-        // Simple SQL: SELECT COUNT(*) with multiple subqueries
-        $dashboardStats = "
-            SELECT 
-                (SELECT COUNT(*) FROM devices) as total_devices,
-                (SELECT COUNT(*) FROM devices WHERE status = 'info') as info_devices,
-                (SELECT COUNT(*) FROM devices WHERE status = 'warning') as warning_devices,
-                (SELECT COUNT(*) FROM devices WHERE status = 'error') as error_devices,
-                (SELECT COUNT(*) FROM device_logs WHERE log_type = 'error' AND resolved_by IS NULL) as unresolved_errors,
-                (SELECT COUNT(*) FROM alerts WHERE status = 'active') as active_alerts,
-                (SELECT COUNT(*) FROM locations) as total_locations,
-                (SELECT COUNT(DISTINCT user_id) FROM devices) as active_users
-        ";
-
-        $stmt = $conn->prepare($dashboardStats);
-        $stmt->execute();
-        $stats = $stmt->fetch(PDO::FETCH_ASSOC);
-    }
-} catch (PDOException $e) {
-    // Database not ready yet, use default values
+if (!$conn) {
+    header('Location: index.php');
+    exit();
 }
 
-// Only query if database is ready
-try {
-    $checkTable = $conn->query("SHOW TABLES LIKE 'devices'");
-    if ($checkTable->rowCount() > 0) {
-        // SQL Feature: LEFT JOIN with GROUP BY and aggregation functions (COUNT, SUM, CASE)
-        // JOIN: device_types LEFT JOIN devices, GROUP BY with aggregate functions
-        $devicesByType = "
-            SELECT 
-                dt.t_name,
-                COUNT(d.d_id) as device_count,
-                SUM(CASE WHEN d.status = 'info' THEN 1 ELSE 0 END) as info_count,
-                SUM(CASE WHEN d.status = 'warning' THEN 1 ELSE 0 END) as warning_count,
-                SUM(CASE WHEN d.status = 'error' THEN 1 ELSE 0 END) as error_count
-            FROM device_types dt
-            LEFT JOIN devices d ON dt.t_id = d.t_id
-            GROUP BY dt.t_id, dt.t_name
-            ORDER BY device_count DESC
-        ";
+// Load all dashboard modules
+$modules = [
+    // JOIN Operations
+    'inner_join' => 'dashboard_modules/module_inner_join.php',
+    'left_join' => 'dashboard_modules/module_left_join.php',
+    'right_join' => 'dashboard_modules/module_right_join.php',
+    'self_join' => 'dashboard_modules/module_self_join.php',
+    'cross_join' => 'dashboard_modules/module_cross_join.php',
+    
+    // Subquery Operations
+    'subquery_scalar' => 'dashboard_modules/module_subquery_scalar.php',
+    'subquery_inline' => 'dashboard_modules/module_subquery_inline.php',
+    'subquery_exists' => 'dashboard_modules/module_subquery_exists.php',
+    
+    // Set Operations
+    'union' => 'dashboard_modules/module_union.php',
+    'union_all' => 'dashboard_modules/module_union_all.php',
+    'intersect' => 'dashboard_modules/module_intersect.php',
+    'except' => 'dashboard_modules/module_except.php',
+    
+    // Saved Database Objects
+    'view_deployment' => 'dashboard_modules/module_view_deployment.php',
+    'view_critical_logs' => 'dashboard_modules/module_view_critical_logs.php',
+    'function_alert_summary' => 'dashboard_modules/module_function_alert_summary.php',
+    'function_health_score' => 'dashboard_modules/module_function_health_score.php',
+    'procedure_device_report' => 'dashboard_modules/module_procedure_device_report.php',
+    
+    // Advanced SQL Features
+    'aggregate_functions' => 'dashboard_modules/module_aggregate_functions.php',
+    'window_functions' => 'dashboard_modules/module_window_functions.php',
+    'case_when' => 'dashboard_modules/module_case_when.php',
+    'having_clause' => 'dashboard_modules/module_having_clause.php',
+    
+    // SQL Operators
+    'group_concat' => 'dashboard_modules/module_group_concat.php',
+    'in_operator' => 'dashboard_modules/module_in_operator.php',
+    'between_operator' => 'dashboard_modules/module_between_operator.php',
+    'like_operator' => 'dashboard_modules/module_like_operator.php',
+    'null_handling' => 'dashboard_modules/module_null_handling.php',
+    'distinct' => 'dashboard_modules/module_distinct.php',
+    
+    // Built-in Functions
+    'string_functions' => 'dashboard_modules/module_string_functions.php',
+    'date_functions' => 'dashboard_modules/module_date_functions.php',
+];
 
-        $stmt = $conn->prepare($devicesByType);
-        $stmt->execute();
-        $deviceTypes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // SQL Feature: Using VIEW v_device_deployment_summary to get device overview
-        // VIEW usage: SELECT from view instead of complex JOIN
-        try {
-            $devicesOverviewQuery = "SELECT * FROM v_device_deployment_summary LIMIT 5";
-            $activeDevicesStmt = $conn->query($devicesOverviewQuery);
-            $activeDevicesList = $activeDevicesStmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Exception $e) {
-            $activeDevicesList = [];
-        }
-
-        // SQL Feature: Complex JOIN with date functions and conditional aggregation
-        $recentActivity = "
-            SELECT 
-                dl.log_id,
-                d.d_name,
-                dt.t_name as device_type,
-                dl.log_type,
-                dl.message,
-                dl.log_time,
-                dl.severity_level,
-                CASE 
-                    WHEN dl.resolved_by IS NOT NULL THEN CONCAT(u.f_name, ' ', u.l_name)
-                    ELSE 'Unresolved'
-                END as resolver,
-                CASE 
-                    WHEN dl.log_type = 'error' AND dl.resolved_by IS NULL THEN 'pending'
-                    WHEN dl.log_type = 'error' AND dl.resolved_by IS NOT NULL THEN 'resolved'
-                    ELSE 'normal'
-                END as status
-            FROM device_logs dl
-            INNER JOIN devices d ON dl.d_id = d.d_id
-            INNER JOIN device_types dt ON d.t_id = dt.t_id
-            LEFT JOIN users u ON dl.resolved_by = u.user_id
-            WHERE dl.log_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-            ORDER BY dl.log_time DESC, dl.severity_level DESC
-            LIMIT 10
-        ";
-
-        $stmt = $conn->prepare($recentActivity);
-        $stmt->execute();
-        $recentLogs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // SQL Feature: Using VIEW v_device_locations to get device locations
-        // VIEW usage: SELECT from view for simplified location query
-        try {
-            $topLocations = "
-                SELECT 
-                    loc_name,
-                    address,
-                    COUNT(*) as device_count
-                FROM v_device_locations
-                WHERE loc_name IS NOT NULL
-                GROUP BY loc_name, address
-                ORDER BY device_count DESC
-                LIMIT 5
-            ";
-            
-            $stmt = $conn->prepare($topLocations);
-            $stmt->execute();
-            $locations = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Exception $e) {
-            $locations = [];
-        }
+// Load module data - isolate each module to avoid function conflicts
+$moduleData = [];
+foreach ($modules as $key => $file) {
+    if (file_exists($file)) {
+        // Use a closure to isolate the module scope
+        $moduleData[$key] = (function($modulePath) {
+            // Capture the module's returned data
+            $getData = function() use ($modulePath) {
+                return include $modulePath;
+            };
+            return $getData();
+        })($file);
     }
-} catch (PDOException $e) {
-    // Database not ready yet, use default values
+}
+
+// Function to render a module card
+function renderModuleCard($data) {
+    if (!$data || !isset($data['data'])) return '';
+    
+    $title = htmlspecialchars($data['title'] ?? 'Untitled');
+    $description = htmlspecialchars($data['description'] ?? '');
+    $icon = $data['icon'] ?? 'fa-database';
+    $sql = htmlspecialchars($data['sql'] ?? '');
+    $results = $data['data'];
+    
+    $rowCount = count($results);
+    $cardId = 'module-' . md5($title);
+    
+    ob_start();
+    ?>
+    <div class="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden">
+        <!-- Module Header -->
+        <div class="bg-gradient-to-r from-gray-700 to-gray-800 text-white p-4">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <h3 class="text-lg font-bold flex items-center mb-1">
+                        <i class="fas <?php echo $icon; ?> mr-2"></i>
+                        <?php echo $title; ?>
+                    </h3>
+                    <p class="text-sm text-gray-300"><?php echo $description; ?></p>
+                </div>
+                <button 
+                    onclick="toggleSQL('<?php echo $cardId; ?>')"
+                    class="ml-3 bg-white/20 hover:bg-white/30 px-3 py-1 rounded text-sm transition-colors"
+                    title="View SQL Code">
+                    <i class="fas fa-code"></i> SQL
+                </button>
+            </div>
+        </div>
+        
+        <!-- SQL Code (Hidden by default) -->
+        <div id="sql-<?php echo $cardId; ?>" class="hidden bg-gray-900 text-gray-100 p-4 overflow-x-auto">
+            <pre class="text-xs font-mono whitespace-pre-wrap"><?php echo $sql; ?></pre>
+        </div>
+        
+        <!-- Results Info -->
+        <div class="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+            <span class="text-sm text-gray-600">
+                <i class="fas fa-table mr-1"></i>
+                <strong><?php echo $rowCount; ?></strong> rows returned
+            </span>
+            <button 
+                onclick="toggleTable('<?php echo $cardId; ?>')"
+                class="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                id="toggle-btn-<?php echo $cardId; ?>">
+                <i class="fas fa-chevron-down mr-1"></i>Show Results
+            </button>
+        </div>
+        
+        <!-- Results Table (Hidden by default) -->
+        <div id="table-<?php echo $cardId; ?>" class="hidden overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <?php if ($rowCount > 0): ?>
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <?php foreach (array_keys($results[0]) as $column): ?>
+                                <th class="px-4 py-2 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                    <?php echo htmlspecialchars($column); ?>
+                                </th>
+                            <?php endforeach; ?>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <?php foreach ($results as $row): ?>
+                            <tr class="hover:bg-gray-50">
+                                <?php foreach ($row as $cell): ?>
+                                    <td class="px-4 py-2 text-sm text-gray-900">
+                                        <?php 
+                                        if ($cell === null) {
+                                            echo '<span class="text-gray-400 italic">NULL</span>';
+                                        } else {
+                                            echo htmlspecialchars($cell);
+                                        }
+                                        ?>
+                                    </td>
+                                <?php endforeach; ?>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                <?php else: ?>
+                    <tbody>
+                        <tr>
+                            <td class="px-4 py-8 text-center text-gray-500">
+                                <i class="fas fa-inbox text-3xl mb-2"></i>
+                                <p>No data available</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                <?php endif; ?>
+            </table>
+        </div>
+    </div>
+    <?php
+    return ob_get_clean();
 }
 ?>
 
@@ -153,462 +184,273 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - IoT Device Manager</title>
+    <title>SQL Operations Dashboard - IoT Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .sql-tooltip {
-            position: relative;
-            display: inline-block;
+        .category-section {
+            scroll-margin-top: 100px;
         }
         
-        .sql-tooltip .tooltip-text {
-            visibility: hidden;
-            width: 400px;
-            background-color: #1f2937;
-            color: #fff;
-            border-radius: 6px;
-            padding: 15px;
-            position: absolute;
-            z-index: 1000;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -200px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            text-align: left;
-            max-height: 300px;
-            overflow-y: auto;
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
-        .sql-tooltip:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
+        .module-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
         }
-        
-        .status-badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.375rem;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .status-info { background-color: #dbeafe; color: #1e40af; }
-        .status-warning { background-color: #fef3c7; color: #d97706; }
-        .status-error { background-color: #fee2e2; color: #dc2626; }
     </style>
 </head>
 <body class="bg-gray-100">
     <?php include 'components/navbar.php'; ?>
     
     <div class="container mx-auto px-4 py-8">
-        <!-- Header -->
-        <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-800 mb-2">
-                <i class="fas fa-tachometer-alt mr-3"></i>Dashboard
-            </h1>
-            <p class="text-gray-600">Welcome back, <?php echo $_SESSION['user_name']; ?>!</p>
-        </div>
-        
-        <!-- SQL Feature Info -->
-        <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-            <div class="flex">
-                <div class="flex-shrink-0">
-                    <i class="fas fa-database text-blue-400"></i>
-                </div>
-                <div class="ml-3">
-                    <p class="text-sm text-blue-700">
-                        <strong>SQL Features Used:</strong> 
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">2 Views</span>
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">1 Stored Procedure (CURSOR, LOOP)</span>
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">2 Functions (IF/ELSE)</span>
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">JOINs, Subqueries, GROUP BY, CASE</span>
+        <!-- Dashboard Header -->
+        <div class="sticky-header bg-white rounded-lg shadow-sm p-6 mb-6">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-chart-line text-blue-600 mr-2"></i>
+                        SQL Operations Dashboard
+                    </h1>
+                    <p class="text-gray-600">
+                        Comprehensive showcase of SQL features: JOINs, Subqueries, Set Operations, Views, Functions, Procedures & More
                     </p>
                 </div>
+                <div class="flex gap-2">
+                    <a href="index.php" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                        <i class="fas fa-database mr-2"></i>Database Setup
+                    </a>
+                    <button onclick="expandAll()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                        <i class="fas fa-expand-alt mr-2"></i>Expand All
+                    </button>
+                    <button onclick="collapseAll()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md text-sm transition-colors">
+                        <i class="fas fa-compress-alt mr-2"></i>Collapse All
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Quick Navigation -->
+            <div class="mt-4 flex flex-wrap gap-2">
+                <a href="#joins" class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm hover:bg-blue-200 transition">
+                    <i class="fas fa-link mr-1"></i>JOINs
+                </a>
+                <a href="#subqueries" class="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm hover:bg-purple-200 transition">
+                    <i class="fas fa-layer-group mr-1"></i>Subqueries
+                </a>
+                <a href="#set-ops" class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm hover:bg-green-200 transition">
+                    <i class="fas fa-object-group mr-1"></i>Set Operations
+                </a>
+                <a href="#db-objects" class="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm hover:bg-orange-200 transition">
+                    <i class="fas fa-database mr-1"></i>Views/Functions/Procedures
+                </a>
+                <a href="#advanced" class="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm hover:bg-red-200 transition">
+                    <i class="fas fa-star mr-1"></i>Advanced SQL
+                </a>
+                <a href="#operators" class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm hover:bg-indigo-200 transition">
+                    <i class="fas fa-sliders-h mr-1"></i>Operators
+                </a>
+                <a href="#functions" class="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm hover:bg-yellow-200 transition">
+                    <i class="fas fa-function mr-1"></i>Built-in Functions
+                </a>
             </div>
         </div>
         
-        <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
-            <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-microchip text-blue-600 text-2xl"></i>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Total Devices</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['total_devices']; ?></p>
-                        </div>
-                    </div>
-                </div>
-                <span class="tooltip-text">
-                    SQL Query:<br>
-                    SELECT COUNT(*) FROM devices
-                </span>
-            </div>
-            
-            <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-bell text-yellow-600 text-2xl"></i>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Active Alerts</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['active_alerts']; ?></p>
-                        </div>
-                    </div>
-                </div>
-                <span class="tooltip-text">
-                    SQL Query:<br>
-                    SELECT COUNT(*) FROM alerts<br>
-                    WHERE status = 'active'
-                </span>
-            </div>
-            
-            <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Error Status</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['error_devices']; ?></p>
-                        </div>
-                    </div>
-                </div>
-                <span class="tooltip-text">
-                    SQL Query:<br>
-                    SELECT COUNT(*) FROM devices<br>
-                    WHERE status = 'error'
-                </span>
-            </div>
-            
-            <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-bug text-orange-600 text-2xl"></i>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Unresolved</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['unresolved_errors']; ?></p>
-                        </div>
-                    </div>
-                </div>
-                <span class="tooltip-text">
-                    SQL Query:<br>
-                    SELECT COUNT(*) FROM device_logs<br>
-                    WHERE log_type = 'error'<br>
-                    AND resolved_by IS NULL
-                </span>
-            </div>
-            
-            <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-map-marker-alt text-purple-600 text-2xl"></i>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Locations</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['total_locations']; ?></p>
-                        </div>
-                    </div>
-                </div>
-                <span class="tooltip-text">
-                    SQL Query:<br>
-                    SELECT COUNT(*) FROM locations
-                </span>
-            </div>
-            
-            <div class="sql-tooltip">
-                <div class="bg-white rounded-lg shadow-md p-4">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-users text-indigo-600 text-2xl"></i>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-600">Active Users</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $stats['active_users']; ?></p>
-                        </div>
-                    </div>
-                </div>
-                <span class="tooltip-text">
-                    SQL Query:<br>
-                    SELECT COUNT(DISTINCT user_id)<br>
-                    FROM devices
-                </span>
+        <!-- JOIN Operations -->
+        <div id="joins" class="category-section mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-link text-blue-600 mr-3"></i>
+                JOIN Operations
+            </h2>
+            <div class="module-grid">
+                <?php
+                echo renderModuleCard($moduleData['inner_join'] ?? []);
+                echo renderModuleCard($moduleData['left_join'] ?? []);
+                echo renderModuleCard($moduleData['right_join'] ?? []);
+                echo renderModuleCard($moduleData['self_join'] ?? []);
+                echo renderModuleCard($moduleData['cross_join'] ?? []);
+                ?>
             </div>
         </div>
         
-        <!-- Database Features Demo -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            <!-- Stored Procedure Example: sp_generate_device_report -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-xl font-bold text-gray-800">
-                        <i class="fas fa-cogs mr-2"></i>Device Status Summary
-                    </h2>
-                    <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">QUERY</span>
-                </div>
-                <div class="bg-gray-50 p-3 rounded mb-4">
-                    <code class="text-xs text-gray-700">
-                        <strong>Available Procedure:</strong> sp_generate_device_report(status)<br>
-                        <span class="text-gray-500">Features: CURSOR, LOOP, IF/ELSE, Temporary Tables</span>
-                    </code>
-                </div>
-                <div class="space-y-2">
-                    <?php
-                    // Show simple device status summary
-                    try {
-                        $conn = $database->getConnection();
-                        $statusQuery = "SELECT status, COUNT(*) as count FROM devices GROUP BY status";
-                        $statusStmt = $conn->query($statusQuery);
-                        $statusResults = $statusStmt->fetchAll(PDO::FETCH_ASSOC);
-                    } catch (Exception $e) {
-                        $statusResults = [];
-                    }
-                    ?>
-                    <?php if (!empty($statusResults)): ?>
-                        <?php foreach ($statusResults as $statusItem): ?>
-                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
-                                <div>
-                                    <span class="font-semibold text-gray-800"><?php echo ucfirst($statusItem['status']); ?></span>
-                                    <p class="text-xs text-gray-500">
-                                        <?php 
-                                        echo $statusItem['status'] === 'info' ? 'Normal Operation' : 
-                                            ($statusItem['status'] === 'warning' ? 'Needs Attention' : 'Critical Issue');
-                                        ?>
-                                    </p>
-                                </div>
-                                <span class="text-2xl font-bold text-blue-600"><?php echo $statusItem['count']; ?></span>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <p class="text-gray-500 text-sm">No devices found</p>
-                    <?php endif; ?>
-                </div>
-            </div>
-            
-            <!-- View: v_device_deployment_summary -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-xl font-bold text-gray-800">
-                        <i class="fas fa-eye mr-2"></i>Device Deployment Summary
-                    </h2>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">VIEW</span>
-                </div>
-                <div class="bg-gray-50 p-3 rounded mb-4">
-                    <code class="text-xs text-gray-700">
-                        <strong>SELECT * FROM</strong> v_device_deployment_summary<br>
-                        <span class="text-gray-500">Features: Multiple JOINs, GROUP BY, COUNT DISTINCT, Subqueries</span>
-                    </code>
-                </div>
-                <div class="space-y-2">
-                    <?php if (!empty($activeDevicesList)): ?>
-                        <?php foreach ($activeDevicesList as $device): ?>
-                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded">
-                                <div class="flex-1">
-                                    <div class="flex items-center">
-                                        <i class="fas fa-microchip text-green-600 mr-2"></i>
-                                        <span class="font-semibold text-gray-800"><?php echo htmlspecialchars($device['d_name']); ?></span>
-                                    </div>
-                                    <p class="text-xs text-gray-500 ml-6"><?php echo htmlspecialchars($device['device_type']); ?> • <?php echo htmlspecialchars($device['owner_name']); ?></p>
-                                </div>
-                                <span class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded"><?php echo $device['status']; ?></span>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <p class="text-gray-500 text-sm">No devices found</p>
-                    <?php endif; ?>
-                </div>
+        <!-- Subqueries -->
+        <div id="subqueries" class="category-section mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-layer-group text-purple-600 mr-3"></i>
+                Subquery Operations
+            </h2>
+            <div class="module-grid">
+                <?php
+                echo renderModuleCard($moduleData['subquery_scalar'] ?? []);
+                echo renderModuleCard($moduleData['subquery_inline'] ?? []);
+                echo renderModuleCard($moduleData['subquery_exists'] ?? []);
+                ?>
             </div>
         </div>
         
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <!-- Device Types Analysis -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="sql-tooltip inline-block">
-                    <h2 class="text-xl font-bold text-gray-800 mb-4">
-                        <i class="fas fa-chart-pie mr-2"></i>Devices by Type
-                    </h2>
-                    <span class="tooltip-text">
-                        SQL Query with LEFT JOIN and GROUP BY:<br><br>
-                        SELECT dt.t_name, COUNT(d.d_id) as device_count,<br>
-                        SUM(CASE WHEN d.status = 'active' THEN 1 ELSE 0 END) as active_count,<br>
-                        SUM(CASE WHEN d.status = 'error' THEN 1 ELSE 0 END) as error_count,<br>
-                        SUM(CASE WHEN d.status = 'maintenance' THEN 1 ELSE 0 END) as maintenance_count<br>
-                        FROM device_types dt<br>
-                        LEFT JOIN devices d ON dt.t_id = d.t_id<br>
-                        GROUP BY dt.t_id, dt.t_name<br>
-                        ORDER BY device_count DESC
-                    </span>
-                </div>
-                
-                <div class="space-y-4">
-                    <?php foreach ($deviceTypes as $type): ?>
-                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                            <div class="flex items-center">
-                                <i class="fas fa-microchip text-blue-600 text-xl mr-3"></i>
-                                <div>
-                                    <h3 class="font-semibold text-gray-800"><?php echo htmlspecialchars($type['t_name']); ?></h3>
-                                    <p class="text-sm text-gray-600"><?php echo $type['device_count']; ?> devices</p>
-                                </div>
-                            </div>
-                            <div class="flex space-x-2">
-                                <?php if ($type['info_count'] > 0): ?>
-                                    <span class="status-badge status-info"><?php echo $type['info_count']; ?> Info</span>
-                                <?php endif; ?>
-                                <?php if ($type['warning_count'] > 0): ?>
-                                    <span class="status-badge status-warning"><?php echo $type['warning_count']; ?> Warning</span>
-                                <?php endif; ?>
-                                <?php if ($type['error_count'] > 0): ?>
-                                    <span class="status-badge status-error"><?php echo $type['error_count']; ?> Error</span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            
-            <!-- Top Locations using VIEW -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-xl font-bold text-gray-800">
-                        <i class="fas fa-map-marker-alt mr-2"></i>Top Locations
-                    </h2>
-                    <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">VIEW</span>
-                </div>
-                <div class="bg-gray-50 p-3 rounded mb-4">
-                    <code class="text-xs text-gray-700">
-                        <strong>SELECT</strong> loc_name, address, COUNT(*)<br>
-                        <strong>FROM</strong> v_device_locations<br>
-                        <strong>GROUP BY</strong> loc_name<br>
-                        <span class="text-gray-500">Features: VIEW with LEFT JOIN</span>
-                    </code>
-                </div>
-                
-                <div class="space-y-4">
-                    <?php if (!empty($locations)): ?>
-                        <?php foreach ($locations as $location): ?>
-                            <div class="p-4 bg-gray-50 rounded-lg">
-                                <div class="flex justify-between items-start mb-2">
-                                    <h3 class="font-semibold text-gray-800"><?php echo htmlspecialchars($location['loc_name']); ?></h3>
-                                    <div class="text-right">
-                                        <span class="text-lg font-bold text-blue-600"><?php echo $location['device_count']; ?></span>
-                                        <p class="text-xs text-gray-500">devices</p>
-                                    </div>
-                                </div>
-                                <p class="text-sm text-gray-600 mb-2"><?php echo htmlspecialchars($location['address']); ?></p>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <p class="text-gray-500 text-sm">No location data available</p>
-                    <?php endif; ?>
-                </div>
+        <!-- Set Operations -->
+        <div id="set-ops" class="category-section mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-object-group text-green-600 mr-3"></i>
+                Set Operations
+            </h2>
+            <div class="module-grid">
+                <?php
+                echo renderModuleCard($moduleData['union'] ?? []);
+                echo renderModuleCard($moduleData['union_all'] ?? []);
+                echo renderModuleCard($moduleData['intersect'] ?? []);
+                echo renderModuleCard($moduleData['except'] ?? []);
+                ?>
             </div>
         </div>
         
-        <!-- Recent Activity -->
-        <div class="mt-8 bg-white rounded-lg shadow-md p-6">
-            <div class="sql-tooltip inline-block">
-                <h2 class="text-xl font-bold text-gray-800 mb-4">
-                    <i class="fas fa-clock mr-2"></i>Recent Activity
-                </h2>
-                <span class="tooltip-text">
-                    Complex Query with Multiple JOINs and CASE statements:<br><br>
-                    SELECT dl.log_id, d.d_name, dt.t_name as device_type,<br>
-                    dl.log_type, dl.message, dl.log_time, dl.severity_level,<br>
-                    CASE WHEN dl.resolved_by IS NOT NULL<br>
-                    THEN CONCAT(u.f_name, ' ', u.l_name)<br>
-                    ELSE 'Unresolved' END as resolver,<br>
-                    CASE WHEN dl.log_type = 'error' AND dl.resolved_by IS NULL<br>
-                    THEN 'pending'<br>
-                    WHEN dl.log_type = 'error' AND dl.resolved_by IS NOT NULL<br>
-                    THEN 'resolved' ELSE 'normal' END as status<br>
-                    FROM device_logs dl<br>
-                    INNER JOIN devices d ON dl.d_id = d.d_id<br>
-                    INNER JOIN device_types dt ON d.t_id = dt.t_id<br>
-                    LEFT JOIN users u ON dl.resolved_by = u.user_id<br>
-                    WHERE dl.log_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)<br>
-                    ORDER BY dl.log_time DESC, dl.severity_level DESC
-                </span>
-            </div>
-            
-            <div class="overflow-x-auto">
-                <table class="min-w-full table-auto">
-                    <thead>
-                        <tr class="bg-gray-50">
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Log Type</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Message</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <?php foreach ($recentLogs as $log): ?>
-                            <tr>
-                                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    <?php echo htmlspecialchars($log['d_name']); ?>
-                                </td>
-                                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <?php echo htmlspecialchars($log['device_type']); ?>
-                                </td>
-                                <td class="px-4 py-4 whitespace-nowrap">
-                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                        <?php echo $log['log_type'] == 'error' ? 'bg-red-100 text-red-800' : 
-                                                   ($log['log_type'] == 'warning' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'); ?>">
-                                        <?php echo ucfirst($log['log_type']); ?>
-                                    </span>
-                                </td>
-                                <td class="px-4 py-4 text-sm text-gray-900 max-w-xs truncate">
-                                    <?php echo htmlspecialchars($log['message']); ?>
-                                </td>
-                                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <?php echo date('M j, H:i', strtotime($log['log_time'])); ?>
-                                </td>
-                                <td class="px-4 py-4 whitespace-nowrap">
-                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                        <?php echo $log['status'] == 'resolved' ? 'bg-green-100 text-green-800' : 
-                                                   ($log['status'] == 'pending' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'); ?>">
-                                        <?php echo ucfirst($log['status']); ?>
-                                    </span>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+        <!-- Database Objects (Views, Functions, Procedures) -->
+        <div id="db-objects" class="category-section mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-database text-orange-600 mr-3"></i>
+                Saved Database Objects (Views, Functions, Procedures)
+            </h2>
+            <div class="module-grid">
+                <?php
+                echo renderModuleCard($moduleData['view_deployment'] ?? []);
+                echo renderModuleCard($moduleData['view_critical_logs'] ?? []);
+                echo renderModuleCard($moduleData['function_alert_summary'] ?? []);
+                echo renderModuleCard($moduleData['function_health_score'] ?? []);
+                echo renderModuleCard($moduleData['procedure_device_report'] ?? []);
+                ?>
             </div>
         </div>
         
-        <!-- Quick Actions -->
-        <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <a href="add_device.php" class="bg-blue-600 hover:bg-blue-700 text-white p-6 rounded-lg shadow-md transition">
-                <i class="fas fa-plus-circle text-2xl mb-2"></i>
-                <h3 class="text-lg font-semibold">Add New Device</h3>
-                <p class="text-sm opacity-90">Register a new IoT device</p>
-            </a>
-            
-            <a href="device_logs.php" class="bg-green-600 hover:bg-green-700 text-white p-6 rounded-lg shadow-md transition">
-                <i class="fas fa-list-alt text-2xl mb-2"></i>
-                <h3 class="text-lg font-semibold">View All Logs</h3>
-                <p class="text-sm opacity-90">Monitor device activities</p>
-            </a>
-            
-            <a href="analytics.php" class="bg-purple-600 hover:bg-purple-700 text-white p-6 rounded-lg shadow-md transition">
-                <i class="fas fa-chart-bar text-2xl mb-2"></i>
-                <h3 class="text-lg font-semibold">Analytics</h3>
-                <p class="text-sm opacity-90">View detailed reports</p>
-            </a>
+        <!-- Advanced SQL -->
+        <div id="advanced" class="category-section mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-star text-red-600 mr-3"></i>
+                Advanced SQL Features
+            </h2>
+            <div class="module-grid">
+                <?php
+                echo renderModuleCard($moduleData['aggregate_functions'] ?? []);
+                echo renderModuleCard($moduleData['window_functions'] ?? []);
+                echo renderModuleCard($moduleData['case_when'] ?? []);
+                echo renderModuleCard($moduleData['having_clause'] ?? []);
+                echo renderModuleCard($moduleData['group_concat'] ?? []);
+                echo renderModuleCard($moduleData['distinct'] ?? []);
+                ?>
+            </div>
+        </div>
+        
+        <!-- SQL Operators -->
+        <div id="operators" class="category-section mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-sliders-h text-indigo-600 mr-3"></i>
+                SQL Operators & Conditions
+            </h2>
+            <div class="module-grid">
+                <?php
+                echo renderModuleCard($moduleData['in_operator'] ?? []);
+                echo renderModuleCard($moduleData['between_operator'] ?? []);
+                echo renderModuleCard($moduleData['like_operator'] ?? []);
+                echo renderModuleCard($moduleData['null_handling'] ?? []);
+                ?>
+            </div>
+        </div>
+        
+        <!-- Built-in Functions -->
+        <div id="functions" class="category-section mb-8">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-function text-yellow-600 mr-3"></i>
+                Built-in Functions
+            </h2>
+            <div class="module-grid">
+                <?php
+                echo renderModuleCard($moduleData['string_functions'] ?? []);
+                echo renderModuleCard($moduleData['date_functions'] ?? []);
+                ?>
+            </div>
+        </div>
+        
+        <!-- Footer Stats -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mt-8">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+                <div>
+                    <div class="text-3xl font-bold text-blue-600">29+</div>
+                    <div class="text-sm text-gray-600">SQL Operations</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-green-600">5</div>
+                    <div class="text-sm text-gray-600">JOIN Types</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-purple-600">4</div>
+                    <div class="text-sm text-gray-600">Set Operations</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-orange-600">5</div>
+                    <div class="text-sm text-gray-600">DB Objects</div>
+                </div>
+                <div>
+                    <div class="text-3xl font-bold text-red-600">6+</div>
+                    <div class="text-sm text-gray-600">Advanced Features</div>
+                </div>
+            </div>
         </div>
     </div>
+    
+    <script>
+        function toggleSQL(cardId) {
+            const sqlDiv = document.getElementById('sql-' + cardId);
+            sqlDiv.classList.toggle('hidden');
+        }
+        
+        function toggleTable(cardId) {
+            const tableDiv = document.getElementById('table-' + cardId);
+            const toggleBtn = document.getElementById('toggle-btn-' + cardId);
+            
+            if (tableDiv.classList.contains('hidden')) {
+                tableDiv.classList.remove('hidden');
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>Hide Results';
+            } else {
+                tableDiv.classList.add('hidden');
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i>Show Results';
+            }
+        }
+        
+        function expandAll() {
+            document.querySelectorAll('[id^="table-"]').forEach(el => {
+                el.classList.remove('hidden');
+            });
+            document.querySelectorAll('[id^="toggle-btn-"]').forEach(btn => {
+                btn.innerHTML = '<i class="fas fa-chevron-up mr-1"></i>Hide Results';
+            });
+        }
+        
+        function collapseAll() {
+            document.querySelectorAll('[id^="table-"]').forEach(el => {
+                el.classList.add('hidden');
+            });
+            document.querySelectorAll('[id^="toggle-btn-"]').forEach(btn => {
+                btn.innerHTML = '<i class="fas fa-chevron-down mr-1"></i>Show Results';
+            });
+        }
+        
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+    </script>
+    
+    </div> <!-- End main-content wrapper -->
 </body>
 </html>

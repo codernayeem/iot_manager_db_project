@@ -71,9 +71,9 @@ if ($_POST) {
                 // SQL Feature: Transaction with multiple operations
                 $conn->beginTransaction();
                 
-                // First, deactivate all deployments for this location
-                $deactivateDeployments = "UPDATE deployments SET is_active = FALSE WHERE loc_id = ?";
-                $stmt = $conn->prepare($deactivateDeployments);
+                // Delete all deployments for this location
+                $deleteDeployments = "DELETE FROM deployments WHERE loc_id = ?";
+                $stmt = $conn->prepare($deleteDeployments);
                 $stmt->execute([$locId]);
                 
                 // Then delete the location
@@ -105,9 +105,9 @@ $locationsQuery = "
         l.longitude,
         l.created_at,
         COUNT(DISTINCT dep.d_id) as total_devices,
-        COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) as active_devices,
-        COUNT(DISTINCT CASE WHEN d.status = 'error' THEN dep.d_id END) as error_devices,
-        COUNT(DISTINCT CASE WHEN d.status = 'maintenance' THEN dep.d_id END) as maintenance_devices,
+        COUNT(DISTINCT CASE WHEN dl.log_type = 'info' THEN d.d_id END) as info_devices,
+        COUNT(DISTINCT CASE WHEN dl.log_type = 'warning' THEN d.d_id END) as warning_devices,
+        COUNT(DISTINCT CASE WHEN dl.log_type = 'error' THEN d.d_id END) as error_devices,
         COUNT(DISTINCT dt.t_id) as device_type_count,
         GROUP_CONCAT(DISTINCT dt.t_name ORDER BY dt.t_name SEPARATOR ', ') as device_types,
         COUNT(DISTINCT dl.log_id) as total_logs,
@@ -115,25 +115,24 @@ $locationsQuery = "
         COUNT(DISTINCT CASE WHEN dl.log_type = 'error' AND dl.resolved_by IS NULL THEN dl.log_id END) as unresolved_errors,
         MAX(dl.log_time) as last_activity,
         AVG(CASE WHEN dl.log_type = 'error' THEN dl.severity_level END) as avg_error_severity,
-        COUNT(DISTINCT dep.deployed_by) as deploying_users,
         ROUND(
-            COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) * 100.0 / 
+            COUNT(DISTINCT CASE WHEN dl.log_type = 'info' THEN d.d_id END) * 100.0 / 
             NULLIF(COUNT(DISTINCT dep.d_id), 0), 2
         ) as uptime_percentage,
         CASE 
             WHEN COUNT(DISTINCT dep.d_id) = 0 THEN 'Empty'
-            WHEN COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) / COUNT(DISTINCT dep.d_id) >= 0.9 THEN 'Excellent'
-            WHEN COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) / COUNT(DISTINCT dep.d_id) >= 0.7 THEN 'Good'
-            WHEN COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) / COUNT(DISTINCT dep.d_id) >= 0.5 THEN 'Fair'
+            WHEN COUNT(DISTINCT CASE WHEN dl.log_type = 'info' THEN d.d_id END) / COUNT(DISTINCT dep.d_id) >= 0.9 THEN 'Excellent'
+            WHEN COUNT(DISTINCT CASE WHEN dl.log_type = 'info' THEN d.d_id END) / COUNT(DISTINCT dep.d_id) >= 0.7 THEN 'Good'
+            WHEN COUNT(DISTINCT CASE WHEN dl.log_type = 'info' THEN d.d_id END) / COUNT(DISTINCT dep.d_id) >= 0.5 THEN 'Fair'
             ELSE 'Poor'
         END as location_health
     FROM locations l
-    LEFT JOIN deployments dep ON l.loc_id = dep.loc_id AND dep.is_active = 1
+    LEFT JOIN deployments dep ON l.loc_id = dep.loc_id
     LEFT JOIN devices d ON dep.d_id = d.d_id
     LEFT JOIN device_types dt ON d.t_id = dt.t_id
     LEFT JOIN device_logs dl ON d.d_id = dl.d_id AND dl.log_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     GROUP BY l.loc_id, l.loc_name, l.address, l.latitude, l.longitude, l.created_at
-    ORDER BY total_devices DESC, active_devices DESC, l.loc_name
+    ORDER BY total_devices DESC, info_devices DESC, l.loc_name
 ";
 
 $stmt = $conn->prepare($locationsQuery);
@@ -163,7 +162,7 @@ $statsQuery = "
     SELECT 
         COUNT(*) as total_locations,
         COUNT(CASE WHEN latitude IS NOT NULL AND longitude IS NOT NULL THEN 1 END) as geocoded_locations,
-        COUNT(CASE WHEN EXISTS(SELECT 1 FROM deployments WHERE loc_id = locations.loc_id AND is_active = 1) THEN 1 END) as active_locations,
+        COUNT(CASE WHEN EXISTS(SELECT 1 FROM deployments WHERE loc_id = locations.loc_id) THEN 1 END) as active_locations,
         AVG(CASE WHEN latitude IS NOT NULL THEN latitude END) as avg_latitude,
         AVG(CASE WHEN longitude IS NOT NULL THEN longitude END) as avg_longitude
     FROM locations
@@ -268,6 +267,26 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
                 </div>
                 <div class="ml-3">
                     <p class="text-sm text-blue-700">
+                        <strong>SQL Features Used:</strong> 
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Spatial data (DECIMAL lat/long)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">LEFT JOIN with multiple tables</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex aggregation (COUNT DISTINCT with CASE)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">GROUP_CONCAT</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">NULLIF & ROUND functions</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Nested CASE for health status</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SQL Feature Info -->
+        <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-database text-blue-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-blue-700">
                         <strong>SQL Features:</strong> Geospatial queries, Distance calculations, Complex aggregations with HAVING, 
                         Conditional aggregation with CASE, GROUP_CONCAT, EXISTS subqueries, Percentage calculations
                     </p>
@@ -318,7 +337,7 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
                 <span class="tooltip-text">
                     <strong>SQL Query:</strong><br><br>
                     SELECT COUNT(CASE WHEN EXISTS(<br>
-                    &nbsp;&nbsp;SELECT 1 FROM deployments WHERE loc_id = locations.loc_id AND is_active = 1<br>
+                    &nbsp;&nbsp;SELECT 1 FROM deployments WHERE loc_id = locations.loc_id<br>
                     ) THEN 1 END) as active_locations FROM locations
                 </span>
             </div>
@@ -402,10 +421,10 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
                         GROUP_CONCAT(DISTINCT dt.t_name ORDER BY dt.t_name SEPARATOR ', ') as device_types,<br>
                         COUNT(DISTINCT dl.log_id) as total_logs,<br>
                         AVG(CASE WHEN dl.log_type = 'error' THEN dl.severity_level END) as avg_error_severity,<br>
-                        ROUND(COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) * 100.0 /<br>
+                        ROUND(COUNT(DISTINCT CASE WHEN dl.log_type = 'info' THEN d.d_id END) * 100.0 /<br>
                         &nbsp;&nbsp;NULLIF(COUNT(DISTINCT dep.d_id), 0), 2) as uptime_percentage<br>
                         FROM locations l<br>
-                        LEFT JOIN deployments dep ON l.loc_id = dep.loc_id AND dep.is_active = 1<br>
+                        LEFT JOIN deployments dep ON l.loc_id = dep.loc_id<br>
                         LEFT JOIN devices d ON dep.d_id = d.d_id<br>
                         LEFT JOIN device_types dt ON d.t_id = dt.t_id<br>
                         LEFT JOIN device_logs dl ON d.d_id = dl.d_id AND dl.log_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)<br>
@@ -455,8 +474,8 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
                         </div>
                         
                         <div class="text-center p-2 bg-gray-50 rounded">
-                            <p class="text-lg font-bold text-green-600"><?php echo $location['active_devices']; ?></p>
-                            <p class="text-xs text-gray-600">Active</p>
+                            <p class="text-lg font-bold text-green-600"><?php echo $location['info_devices']; ?></p>
+                            <p class="text-xs text-gray-600">Info Logs</p>
                         </div>
                     </div>
                     
@@ -512,8 +531,8 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
                         <!-- Progress Bar -->
                         <div class="mb-4">
                             <div class="flex justify-between text-xs text-gray-600 mb-1">
-                                <span>Device Status</span>
-                                <span><?php echo $location['active_devices']; ?>/<?php echo $location['total_devices']; ?></span>
+                                <span>Device Health</span>
+                                <span><?php echo $location['info_devices']; ?>/<?php echo $location['total_devices']; ?></span>
                             </div>
                             <div class="w-full bg-gray-200 rounded-full h-2">
                                 <div class="bg-green-600 h-2 rounded-full" 
@@ -606,19 +625,19 @@ function calculateDistance($lat1, $lon1, $lat2, $lon2) {
           NULLIF(COUNT(DISTINCT dep.d_id), 0), 2) as uptime_percentage,
     CASE 
         WHEN COUNT(DISTINCT dep.d_id) = 0 THEN 'Empty'
-        WHEN COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) / 
+        WHEN COUNT(DISTINCT CASE WHEN dl.log_type = 'info' THEN d.d_id END) / 
              COUNT(DISTINCT dep.d_id) >= 0.9 THEN 'Excellent'
-        WHEN COUNT(DISTINCT CASE WHEN d.status = 'active' THEN dep.d_id END) / 
+        WHEN COUNT(DISTINCT CASE WHEN dl.log_type = 'info' THEN d.d_id END) / 
              COUNT(DISTINCT dep.d_id) >= 0.7 THEN 'Good'
         ELSE 'Poor'
     END as location_health
 FROM locations l
-LEFT JOIN deployments dep ON l.loc_id = dep.loc_id AND dep.is_active = 1
+LEFT JOIN deployments dep ON l.loc_id = dep.loc_id
 LEFT JOIN devices d ON dep.d_id = d.d_id
 LEFT JOIN device_types dt ON d.t_id = dt.t_id
 LEFT JOIN device_logs dl ON d.d_id = dl.d_id AND dl.log_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
 GROUP BY l.loc_id, l.loc_name, l.address, l.latitude, l.longitude
-ORDER BY total_devices DESC, active_devices DESC;</pre>
+ORDER BY total_devices DESC, info_devices DESC;</pre>
             </div>
         </div>
     </div>

@@ -8,12 +8,50 @@ if (!isset($_SESSION['user_id'])) {
 require_once 'config/database.php';
 
 /**
- * SQL Features Used: Full-text search, Complex filtering, Date ranges, 
- * Resolution tracking, Bulk operations
+ * Device Logs Management Page
+ * SQL Features Used:
+ * - INNER JOIN (logs with devices, device_types, users, locations)
+ * - LEFT JOIN for optional relationships (resolved_by)
+ * - INSERT with NOW() function for timestamps
+ * - UPDATE with conditional WHERE (resolved_by IS NULL)
+ * - FULLTEXT search on message column
+ * - MATCH AGAINST for full-text search
+ * - Complex filtering with multiple conditions
+ * - EXISTS subquery for location filtering
+ * - Date range filtering with BETWEEN
+ * - CASE expressions for status display
+ * - CONCAT for string concatenation
+ * - DATE_FORMAT for timestamp formatting
+ * - TIMESTAMPDIFF for time calculations
+ * - ORDER BY with multiple columns
+ * - LIMIT and OFFSET for pagination
+ * - Prepared statements with dynamic parameters
  */
 
 $database = new Database();
 $conn = $database->getConnection();
+
+$successMessage = '';
+$errorMessage = '';
+
+// Handle adding new log
+if ($_POST && isset($_POST['add_log'])) {
+    $deviceId = (int)$_POST['device_id'];
+    $logType = $_POST['log_type'];
+    $message = trim($_POST['message']);
+    $severityLevel = (int)$_POST['severity_level'];
+    
+    // SQL Feature: INSERT with validation
+    $insertSql = "INSERT INTO device_logs (d_id, log_type, message, severity_level, log_time) 
+                  VALUES (?, ?, ?, ?, NOW())";
+    
+    $stmt = $conn->prepare($insertSql);
+    if ($stmt->execute([$deviceId, $logType, $message, $severityLevel])) {
+        $successMessage = "Log added successfully!";
+    } else {
+        $errorMessage = "Failed to add log.";
+    }
+}
 
 // Handle log resolution
 if ($_POST && isset($_POST['resolve_log'])) {
@@ -55,7 +93,7 @@ if ($deviceFilter > 0) {
 }
 
 if ($locationFilter > 0) {
-    $whereConditions[] = "EXISTS (SELECT 1 FROM deployments dep_filter WHERE dep_filter.d_id = dl.d_id AND dep_filter.loc_id = ? AND dep_filter.is_active = 1)";
+    $whereConditions[] = "EXISTS (SELECT 1 FROM deployments dep_filter WHERE dep_filter.d_id = dl.d_id AND dep_filter.loc_id = ?)";
     $params[] = $locationFilter;
 }
 
@@ -132,7 +170,7 @@ $logsQuery = "
     INNER JOIN device_types dt ON d.t_id = dt.t_id
     INNER JOIN users u ON d.user_id = u.user_id
     LEFT JOIN users ru ON dl.resolved_by = ru.user_id
-    LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+    LEFT JOIN deployments dep ON d.d_id = dep.d_id
     LEFT JOIN locations l ON dep.loc_id = l.loc_id
     $whereClause
     GROUP BY dl.log_id, dl.d_id, dl.log_time, dl.log_type, dl.message, dl.severity_level,
@@ -157,7 +195,7 @@ $countQuery = "
     INNER JOIN device_types dt ON d.t_id = dt.t_id
     INNER JOIN users u ON d.user_id = u.user_id
     LEFT JOIN users ru ON dl.resolved_by = ru.user_id
-    LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1
+    LEFT JOIN deployments dep ON d.d_id = dep.d_id
     LEFT JOIN locations l ON dep.loc_id = l.loc_id
     $whereClause
 ";
@@ -178,6 +216,17 @@ $devicesQuery = "
 $devicesStmt = $conn->prepare($devicesQuery);
 $devicesStmt->execute();
 $devices = $devicesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Get all devices for add log form
+$allDevicesQuery = "
+    SELECT d.d_id, d.d_name, dt.t_name as device_type, d.status
+    FROM devices d
+    INNER JOIN device_types dt ON d.t_id = dt.t_id
+    ORDER BY d.d_name
+";
+$allDevicesStmt = $conn->prepare($allDevicesQuery);
+$allDevicesStmt->execute();
+$allDevices = $allDevicesStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Get log statistics
 $statsQuery = "
@@ -272,6 +321,10 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                 </h1>
                 <p class="text-gray-600">Monitor and manage device activities and issues</p>
             </div>
+            <button onclick="document.getElementById('addLogModal').classList.remove('hidden')" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg shadow-md transition">
+                <i class="fas fa-plus mr-2"></i>Add Log
+            </button>
         </div>
         
         <!-- SQL Feature Info -->
@@ -282,17 +335,29 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                 </div>
                 <div class="ml-3">
                     <p class="text-sm text-blue-700">
-                        <strong>SQL Features:</strong> Full-text search (MATCH AGAINST), Complex WHERE clauses, Window functions (ROW_NUMBER), 
-                        CASE statements, Date functions (TIMESTAMPDIFF), GROUP_CONCAT, Multiple JOINs
+                        <strong>SQL Features Used:</strong> 
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">FULLTEXT search (MATCH AGAINST)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">INNER JOIN & LEFT JOIN</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">INSERT & UPDATE operations</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">EXISTS subquery</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">BETWEEN for date ranges</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">CASE expressions</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">TIMESTAMPDIFF & DATE_FORMAT</span>
                     </p>
                 </div>
             </div>
         </div>
         
-        <!-- Success Message -->
-        <?php if (isset($successMessage)): ?>
+        <!-- Success/Error Messages -->
+        <?php if (!empty($successMessage)): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
                 <i class="fas fa-check-circle mr-2"></i><?php echo $successMessage; ?>
+            </div>
+        <?php endif; ?>
+        
+        <?php if (!empty($errorMessage)): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                <i class="fas fa-exclamation-circle mr-2"></i><?php echo $errorMessage; ?>
             </div>
         <?php endif; ?>
         
@@ -485,7 +550,7 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                     INNER JOIN devices d ON dl.d_id = d.d_id<br>
                     INNER JOIN device_types dt ON d.t_id = dt.t_id<br>
                     LEFT JOIN users u ON dl.resolved_by = u.user_id<br>
-                    LEFT JOIN deployments dep ON d.d_id = dep.d_id AND dep.is_active = 1<br>
+                    LEFT JOIN deployments dep ON d.d_id = dep.d_id<br>
                     LEFT JOIN locations l ON dep.loc_id = l.loc_id<br>
                     WHERE [dynamic conditions]<br>
                     ORDER BY dl.log_time DESC LIMIT 20
@@ -656,6 +721,103 @@ $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
                 </nav>
             </div>
         <?php endif; ?>
+    </div>
+
+    <!-- Add Log Modal -->
+    <div id="addLogModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-gray-900">
+                    <i class="fas fa-plus-circle mr-2 text-blue-600"></i>Add New Log Entry
+                </h3>
+                <button onclick="document.getElementById('addLogModal').classList.add('hidden')" 
+                        class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            
+            <form method="POST" action="" class="space-y-4">
+                <input type="hidden" name="add_log" value="1">
+                
+                <!-- Device Selection -->
+                <div>
+                    <label for="device_id" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-microchip mr-2"></i>Device *
+                    </label>
+                    <select id="device_id" 
+                            name="device_id" 
+                            required
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select a device</option>
+                        <?php foreach ($allDevices as $device): ?>
+                            <option value="<?php echo $device['d_id']; ?>">
+                                <?php echo htmlspecialchars($device['d_name']); ?> 
+                                (<?php echo htmlspecialchars($device['device_type']); ?>) 
+                                - <?php echo ucfirst($device['status']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                
+                <!-- Log Type -->
+                <div>
+                    <label for="log_type" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-tags mr-2"></i>Log Type *
+                    </label>
+                    <select id="log_type" 
+                            name="log_type" 
+                            required
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                        <option value="info">Info - Normal operation</option>
+                        <option value="warning">Warning - Needs attention</option>
+                        <option value="error">Error - Critical issue</option>
+                        <option value="debug">Debug - Diagnostic information</option>
+                    </select>
+                </div>
+                
+                <!-- Severity Level -->
+                <div>
+                    <label for="severity_level" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>Severity Level (1-10) *
+                    </label>
+                    <input type="number" 
+                           id="severity_level" 
+                           name="severity_level" 
+                           min="1" 
+                           max="10" 
+                           value="5"
+                           required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">1 = Lowest severity, 10 = Highest severity</p>
+                </div>
+                
+                <!-- Message -->
+                <div>
+                    <label for="message" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-comment-alt mr-2"></i>Message *
+                    </label>
+                    <textarea id="message" 
+                              name="message" 
+                              rows="4"
+                              required
+                              placeholder="Describe the log event..."
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                
+                <!-- Buttons -->
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" 
+                            onclick="document.getElementById('addLogModal').classList.add('hidden')"
+                            class="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition">
+                        <i class="fas fa-save mr-2"></i>Add Log
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </body>
 </html>

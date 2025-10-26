@@ -24,7 +24,7 @@ $sortBy = isset($_GET['sort']) ? $_GET['sort'] : 't_name';
 $sortOrder = isset($_GET['order']) && $_GET['order'] === 'desc' ? 'DESC' : 'ASC';
 
 // Validate sort column
-$allowedSortColumns = ['t_id', 't_name', 'device_count', 'active_count', 'created_at'];
+$allowedSortColumns = ['t_id', 't_name', 'device_count', 'info_count', 'warning_count', 'error_count'];
 if (!in_array($sortBy, $allowedSortColumns)) {
     $sortBy = 't_name';
 }
@@ -35,13 +35,14 @@ if ($_POST) {
     
     if ($action === 'add') {
         $typeName = trim($_POST['t_name']);
+        $typeDesc = trim($_POST['desc']);
         
         if (!empty($typeName)) {
             try {
                 // SQL: INSERT - Add new device type
-                $sql = "INSERT INTO device_types (t_name) VALUES (?)";
+                $sql = "INSERT INTO device_types (t_name, `desc`) VALUES (?, ?)";
                 $stmt = $conn->prepare($sql);
-                if ($stmt->execute([$typeName])) {
+                if ($stmt->execute([$typeName, $typeDesc])) {
                     $success = "Device type added successfully!";
                 }
             } catch (PDOException $e) {
@@ -57,13 +58,14 @@ if ($_POST) {
     } elseif ($action === 'edit') {
         $typeId = (int)$_POST['t_id'];
         $typeName = trim($_POST['t_name']);
+        $typeDesc = trim($_POST['desc']);
         
         if (!empty($typeName) && $typeId > 0) {
             try {
                 // SQL: UPDATE - Modify existing device type
-                $sql = "UPDATE device_types SET t_name = ? WHERE t_id = ?";
+                $sql = "UPDATE device_types SET t_name = ?, `desc` = ? WHERE t_id = ?";
                 $stmt = $conn->prepare($sql);
-                if ($stmt->execute([$typeName, $typeId])) {
+                if ($stmt->execute([$typeName, $typeDesc, $typeId])) {
                     $success = "Device type updated successfully!";
                 }
             } catch (PDOException $e) {
@@ -104,17 +106,14 @@ if ($_POST) {
     }
 }
 
-// SQL: SELECT with LEFT JOIN, GROUP BY, COUNT, and CASE for aggregation
+// SQL: SELECT with LEFT JOIN, GROUP BY, COUNT for aggregation
 // Get all device types with device count and search/sort functionality
 $typesQuery = "
     SELECT 
         dt.t_id,
         dt.t_name,
-        dt.created_at,
-        COUNT(d.d_id) as device_count,
-        COUNT(CASE WHEN d.status = 'active' THEN 1 END) as active_count,
-        COUNT(CASE WHEN d.status = 'maintenance' THEN 1 END) as maintenance_count,
-        COUNT(CASE WHEN d.status = 'inactive' THEN 1 END) as inactive_count
+        dt.desc,
+        COUNT(DISTINCT d.d_id) as device_count
     FROM device_types dt
     LEFT JOIN devices d ON dt.t_id = d.t_id
 ";
@@ -125,7 +124,7 @@ if (!empty($search)) {
 }
 
 $typesQuery .= "
-    GROUP BY dt.t_id, dt.t_name, dt.created_at
+    GROUP BY dt.t_id, dt.t_name, dt.desc
     ORDER BY " . $sortBy . " " . $sortOrder;
 
 $stmt = $conn->prepare($typesQuery);
@@ -198,10 +197,11 @@ try {
                     <h3 class="font-semibold text-gray-800 mb-1">SQL Features Demonstrated</h3>
                     <p class="text-sm text-gray-600">
                         <strong>SQL Features Used:</strong> 
-                        <span class="inline-block px-2 py-1 bg-purple-100 text-purple-800 rounded mr-2">Complex JOIN with aggregation</span>
-                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Complex JOINs</span>
+                        <span class="inline-block px-2 py-1 bg-purple-100 text-purple-800 rounded mr-2">CRUD Operations (INSERT, SELECT, UPDATE, DELETE)</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">LEFT JOIN with devices</span>
                         <span class="inline-block px-2 py-1 bg-white rounded mr-2">GROUP BY with COUNT</span>
-                        <span class="inline-block px-2 py-1 bg-white rounded">ORDER BY with sorting</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded mr-2">Foreign key constraints</span>
+                        <span class="inline-block px-2 py-1 bg-white rounded">UNIQUE constraint validation</span>
                     </p>
                 </div>
             </div>
@@ -252,7 +252,7 @@ try {
         </div>
         
         <!-- Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-1 gap-6 mb-8">
             <div class="bg-white rounded-lg shadow-md p-6">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
@@ -263,46 +263,6 @@ try {
                         <p class="text-2xl font-bold text-gray-900"><?php echo $stats['total_types']; ?></p>
                         <p class="text-xs text-gray-500 mt-1">
                             <i class="fas fa-database mr-1"></i>SELECT COUNT(*)
-                        </p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-microchip text-green-600 text-2xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">Total Devices</p>
-                        <p class="text-2xl font-bold text-gray-900">
-                            <?php 
-                            $totalDevices = array_sum(array_column($deviceTypes, 'device_count'));
-                            echo $totalDevices;
-                            ?>
-                        </p>
-                        <p class="text-xs text-gray-500 mt-1">
-                            <i class="fas fa-database mr-1"></i>COUNT + LEFT JOIN
-                        </p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <i class="fas fa-check-circle text-purple-600 text-2xl"></i>
-                    </div>
-                    <div class="ml-4">
-                        <p class="text-sm font-medium text-gray-600">Active Devices</p>
-                        <p class="text-2xl font-bold text-gray-900">
-                            <?php 
-                            $totalActive = array_sum(array_column($deviceTypes, 'active_count'));
-                            echo $totalActive;
-                            ?>
-                        </p>
-                        <p class="text-xs text-gray-500 mt-1">
-                            <i class="fas fa-database mr-1"></i>COUNT with CASE
                         </p>
                     </div>
                 </div>
@@ -382,31 +342,6 @@ try {
                                         <?php endif; ?>
                                     </a>
                                 </th>
-                                <th class="px-6 py-3 text-left">
-                                    <a href="?search=<?php echo urlencode($search); ?>&sort=active_count&order=<?php echo ($sortBy === 'active_count' && $sortOrder === 'ASC') ? 'desc' : 'asc'; ?>" 
-                                       class="flex items-center text-xs font-medium text-gray-600 uppercase tracking-wider hover:text-blue-600">
-                                        Active
-                                        <?php if ($sortBy === 'active_count'): ?>
-                                            <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?> ml-1"></i>
-                                        <?php else: ?>
-                                            <i class="fas fa-sort ml-1 text-gray-400"></i>
-                                        <?php endif; ?>
-                                    </a>
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                                    Status Distribution
-                                </th>
-                                <th class="px-6 py-3 text-left">
-                                    <a href="?search=<?php echo urlencode($search); ?>&sort=created_at&order=<?php echo ($sortBy === 'created_at' && $sortOrder === 'ASC') ? 'desc' : 'asc'; ?>" 
-                                       class="flex items-center text-xs font-medium text-gray-600 uppercase tracking-wider hover:text-blue-600">
-                                        Created At
-                                        <?php if ($sortBy === 'created_at'): ?>
-                                            <i class="fas fa-sort-<?php echo $sortOrder === 'ASC' ? 'up' : 'down'; ?> ml-1"></i>
-                                        <?php else: ?>
-                                            <i class="fas fa-sort ml-1 text-gray-400"></i>
-                                        <?php endif; ?>
-                                    </a>
-                                </th>
                                 <th class="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
                                     Actions
                                 </th>
@@ -418,12 +353,19 @@ try {
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span class="text-sm font-mono text-gray-900">#<?php echo $type['t_id']; ?></span>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
+                                    <td class="px-6 py-4">
                                         <div class="flex items-center">
                                             <i class="fas fa-tag text-blue-600 mr-2"></i>
-                                            <span class="text-sm font-medium text-gray-900">
-                                                <?php echo htmlspecialchars($type['t_name']); ?>
-                                            </span>
+                                            <div>
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    <?php echo htmlspecialchars($type['t_name']); ?>
+                                                </div>
+                                                <?php if (!empty($type['desc'])): ?>
+                                                    <div class="text-xs text-gray-500 mt-1">
+                                                        <?php echo htmlspecialchars($type['desc']); ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -433,35 +375,6 @@ try {
                                             <i class="fas fa-microchip mr-1"></i>
                                             <?php echo $type['device_count']; ?>
                                         </span>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold 
-                                            <?php echo $type['active_count'] > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'; ?>">
-                                            <i class="fas fa-check-circle mr-1"></i>
-                                            <?php echo $type['active_count']; ?>
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <div class="flex items-center space-x-2 text-xs">
-                                            <span class="text-green-600" title="Active devices">
-                                                <i class="fas fa-circle text-xs"></i> <?php echo $type['active_count']; ?>
-                                            </span>
-                                            <span class="text-yellow-600" title="Maintenance">
-                                                <i class="fas fa-circle text-xs"></i> <?php echo $type['maintenance_count']; ?>
-                                            </span>
-                                            <span class="text-red-600" title="Inactive">
-                                                <i class="fas fa-circle text-xs"></i> <?php echo $type['inactive_count']; ?>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <div>
-                                            <i class="fas fa-calendar mr-1"></i>
-                                            <?php echo date('M j, Y', strtotime($type['created_at'])); ?>
-                                        </div>
-                                        <div class="text-xs text-gray-400">
-                                            <?php echo date('g:i A', strtotime($type['created_at'])); ?>
-                                        </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <button onclick='editType(<?php echo json_encode($type); ?>)' 
@@ -502,6 +415,17 @@ try {
                                required
                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                                placeholder="e.g., Temperature Sensor">
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="typeDesc" class="block text-sm font-medium text-gray-700 mb-2">
+                            Description
+                        </label>
+                        <textarea id="typeDesc" 
+                                  name="desc" 
+                                  rows="3"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                                  placeholder="Brief description of this device type..."></textarea>
                     </div>
                     
                     <div class="flex justify-end space-x-2">
@@ -556,6 +480,7 @@ try {
             document.getElementById('formAction').value = 'add';
             document.getElementById('typeId').value = '';
             document.getElementById('typeName').value = '';
+            document.getElementById('typeDesc').value = '';
             document.getElementById('typeModal').classList.remove('hidden');
         }
         
@@ -564,6 +489,7 @@ try {
             document.getElementById('formAction').value = 'edit';
             document.getElementById('typeId').value = type.t_id;
             document.getElementById('typeName').value = type.t_name;
+            document.getElementById('typeDesc').value = type.desc || '';
             document.getElementById('typeModal').classList.remove('hidden');
         }
         
